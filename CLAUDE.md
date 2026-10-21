@@ -74,6 +74,7 @@ tests/             # unit/, integration/, agent/
 
 ```bash
 uv sync                                   # install
+uv run pre-commit install --install-hooks # lint + commit message hooks (once)
 docker compose up -d db langfuse          # local services
 uv run alembic upgrade head               # migrations
 uv run pytest                             # all tests
