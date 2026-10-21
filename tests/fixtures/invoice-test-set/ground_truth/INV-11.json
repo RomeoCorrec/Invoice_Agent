@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-11",
+  "title": "PDF sans XML, nominal",
+  "file": "invoices/INV-11_IV-2026-3388_pdf.pdf",
+  "format": "pdf_text_only",
+  "expected_extraction": {
+    "invoice_number": "IV-2026-3388",
+    "issue_date": "2026-10-05",
+    "due_date": "2026-11-04",
+    "currency": "EUR",
+    "seller": {
+      "name": "Imprimerie Vasseur & Fils",
+      "siren": "689132868",
+      "vat_number": "FR77689132868"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0111",
+    "iban": "FR7699470095021252774786577",
+    "lines": [
+      {
+        "description": "Kakémonos 85 x 200 cm",
+        "quantity": "3",
+        "unit_price": "119.00",
+        "vat_rate": "20.00",
+        "amount_ht": "357.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "357.00",
+        "vat": "71.40"
+      }
+    ],
+    "total_ht": "357.00",
+    "total_vat": "71.40",
+    "total_ttc": "428.40"
+  },
+  "expected_supplier_code": "SUP-006",
+  "expected_po_match": "PO-2026-0111",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-10-05",
+    "reference": "IV-2026-3388",
+    "lines": [
+      {
+        "account": "6236",
+        "label": "Catalogues et imprimés",
+        "debit": "357.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "71.40",
+        "credit": "0.00"
+      },
+      {
+        "account": "401VASS",
+        "label": "Imprimerie Vasseur & Fils",
+        "debit": "0.00",
+        "credit": "428.40"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

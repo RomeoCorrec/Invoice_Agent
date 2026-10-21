@@ -1,0 +1,86 @@
+{
+  "case_id": "INV-05",
+  "title": "Nominal, deux taux de TVA (10 % et 20 %)",
+  "file": "invoices/INV-05_CDA-26-0412_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "CDA-26-0412",
+    "issue_date": "2026-09-17",
+    "due_date": "2026-10-17",
+    "currency": "EUR",
+    "seller": {
+      "name": "Café des Ateliers SARL",
+      "siren": "850223454",
+      "vat_number": "FR84850223454"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0105",
+    "iban": "FR7699061508882043304951471",
+    "lines": [
+      {
+        "description": "Plateaux repas séminaire",
+        "quantity": "24",
+        "unit_price": "18.50",
+        "vat_rate": "10.00",
+        "amount_ht": "444.00"
+      },
+      {
+        "description": "Boissons sans alcool (lot)",
+        "quantity": "3",
+        "unit_price": "42.00",
+        "vat_rate": "20.00",
+        "amount_ht": "126.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "126.00",
+        "vat": "25.20"
+      },
+      {
+        "rate": "10.00",
+        "basis": "444.00",
+        "vat": "44.40"
+      }
+    ],
+    "total_ht": "570.00",
+    "total_vat": "69.60",
+    "total_ttc": "639.60"
+  },
+  "expected_supplier_code": "SUP-005",
+  "expected_po_match": "PO-2026-0105",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-17",
+    "reference": "CDA-26-0412",
+    "lines": [
+      {
+        "account": "6257",
+        "label": "Réceptions",
+        "debit": "570.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "69.60",
+        "credit": "0.00"
+      },
+      {
+        "account": "401CAFE",
+        "label": "Café des Ateliers SARL",
+        "debit": "0.00",
+        "credit": "639.60"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Restauration à 10 %, boissons sans alcool vendues à emporter à 20 % (taux choisis pour le test)."
+}

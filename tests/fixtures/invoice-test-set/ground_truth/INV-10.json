@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-10",
+  "title": "PDF sans XML, nominal",
+  "file": "invoices/INV-10_LP-0099140_pdf.pdf",
+  "format": "pdf_text_only",
+  "expected_extraction": {
+    "invoice_number": "LP-0099140",
+    "issue_date": "2026-10-03",
+    "due_date": "2026-11-02",
+    "currency": "EUR",
+    "seller": {
+      "name": "Loca'Pro Matériel SAS",
+      "siren": "623671427",
+      "vat_number": "FR14623671427"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0110",
+    "iban": "FR7699564167888709841081737",
+    "lines": [
+      {
+        "description": "Location sonorisation événement",
+        "quantity": "1",
+        "unit_price": "640.00",
+        "vat_rate": "20.00",
+        "amount_ht": "640.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "640.00",
+        "vat": "128.00"
+      }
+    ],
+    "total_ht": "640.00",
+    "total_vat": "128.00",
+    "total_ttc": "768.00"
+  },
+  "expected_supplier_code": "SUP-004",
+  "expected_po_match": "PO-2026-0110",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-10-03",
+    "reference": "LP-0099140",
+    "lines": [
+      {
+        "account": "6135",
+        "label": "Locations mobilières",
+        "debit": "640.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "128.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401LOCA",
+        "label": "Loca'Pro Matériel SAS",
+        "debit": "0.00",
+        "credit": "768.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

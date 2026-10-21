@@ -1,0 +1,80 @@
+[
+  {
+    "code": "SUP-001",
+    "name": "Papeterie Mercier SARL",
+    "siren": "151757747",
+    "siret": "15175774726270",
+    "vat_number": "FR67151757747",
+    "iban": "FR7699053965263585803695442",
+    "address": "4 avenue de la République",
+    "postcode": "69003",
+    "city": "Lyon",
+    "default_expense_account": "6064",
+    "supplier_account": "401MERC"
+  },
+  {
+    "code": "SUP-002",
+    "name": "ClimaTech Maintenance SAS",
+    "siren": "419058185",
+    "siret": "41905818598287",
+    "vat_number": "FR53419058185",
+    "iban": "FR7699370471326409308966394",
+    "address": "27 rue du Faubourg",
+    "postcode": "33000",
+    "city": "Bordeaux",
+    "default_expense_account": "6156",
+    "supplier_account": "401CLIM"
+  },
+  {
+    "code": "SUP-003",
+    "name": "Cabinet Delorme Conseil",
+    "siren": "586323263",
+    "siret": "58632326383396",
+    "vat_number": "FR28586323263",
+    "iban": "FR7699065841650681552315323",
+    "address": "9 place Bellecour",
+    "postcode": "69002",
+    "city": "Lyon",
+    "default_expense_account": "6226",
+    "supplier_account": "401DELO"
+  },
+  {
+    "code": "SUP-004",
+    "name": "Loca'Pro Matériel SAS",
+    "siren": "623671427",
+    "siret": "62367142766441",
+    "vat_number": "FR14623671427",
+    "iban": "FR7699564167888709841081737",
+    "address": "112 boulevard Voltaire",
+    "postcode": "75011",
+    "city": "Paris",
+    "default_expense_account": "6135",
+    "supplier_account": "401LOCA"
+  },
+  {
+    "code": "SUP-005",
+    "name": "Café des Ateliers SARL",
+    "siren": "850223454",
+    "siret": "85022345465811",
+    "vat_number": "FR84850223454",
+    "iban": "FR7699061508882043304951471",
+    "address": "3 rue Oberkampf",
+    "postcode": "75011",
+    "city": "Paris",
+    "default_expense_account": "6257",
+    "supplier_account": "401CAFE"
+  },
+  {
+    "code": "SUP-006",
+    "name": "Imprimerie Vasseur & Fils",
+    "siren": "689132868",
+    "siret": "68913286811362",
+    "vat_number": "FR77689132868",
+    "iban": "FR7699470095021252774786577",
+    "address": "45 rue Nationale",
+    "postcode": "59000",
+    "city": "Lille",
+    "default_expense_account": "6236",
+    "supplier_account": "401VASS"
+  }
+]

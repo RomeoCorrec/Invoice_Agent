@@ -1,0 +1,245 @@
+[
+  {
+    "number": "PO-2026-0101",
+    "supplier_code": "SUP-001",
+    "order_date": "2026-09-01",
+    "status": "open",
+    "total_ht": "300.00",
+    "lines": [
+      {
+        "description": "Ramettes papier A4 80 g (carton de 5)",
+        "quantity": "10",
+        "unit_price": "24.90",
+        "amount_ht": "249.00"
+      },
+      {
+        "description": "Stylos gel noirs (boîte de 12)",
+        "quantity": "6",
+        "unit_price": "8.50",
+        "amount_ht": "51.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0102",
+    "supplier_code": "SUP-002",
+    "order_date": "2026-09-03",
+    "status": "open",
+    "total_ht": "1250.00",
+    "lines": [
+      {
+        "description": "Contrat de maintenance climatisation, trimestre 4",
+        "quantity": "1",
+        "unit_price": "1250.00",
+        "amount_ht": "1250.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0103",
+    "supplier_code": "SUP-003",
+    "order_date": "2026-09-05",
+    "status": "open",
+    "total_ht": "3800.00",
+    "lines": [
+      {
+        "description": "Mission d'accompagnement organisation (jours)",
+        "quantity": "4",
+        "unit_price": "950.00",
+        "amount_ht": "3800.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0104",
+    "supplier_code": "SUP-004",
+    "order_date": "2026-09-08",
+    "status": "open",
+    "total_ht": "490.00",
+    "lines": [
+      {
+        "description": "Location vidéoprojecteur (semaine)",
+        "quantity": "2",
+        "unit_price": "180.00",
+        "amount_ht": "360.00"
+      },
+      {
+        "description": "Location écran mobile (semaine)",
+        "quantity": "2",
+        "unit_price": "65.00",
+        "amount_ht": "130.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0105",
+    "supplier_code": "SUP-005",
+    "order_date": "2026-09-10",
+    "status": "open",
+    "total_ht": "570.00",
+    "lines": [
+      {
+        "description": "Plateaux repas séminaire",
+        "quantity": "24",
+        "unit_price": "18.50",
+        "amount_ht": "444.00"
+      },
+      {
+        "description": "Boissons sans alcool (lot)",
+        "quantity": "3",
+        "unit_price": "42.00",
+        "amount_ht": "126.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0106",
+    "supplier_code": "SUP-006",
+    "order_date": "2026-09-12",
+    "status": "open",
+    "total_ht": "1248.00",
+    "lines": [
+      {
+        "description": "Brochures A5 quadri (lot de 500)",
+        "quantity": "4",
+        "unit_price": "312.00",
+        "amount_ht": "1248.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0107",
+    "supplier_code": "SUP-001",
+    "order_date": "2026-09-15",
+    "status": "open",
+    "total_ht": "134.00",
+    "lines": [
+      {
+        "description": "Classeurs à levier dos 75 mm",
+        "quantity": "40",
+        "unit_price": "3.35",
+        "amount_ht": "134.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0108",
+    "supplier_code": "SUP-002",
+    "order_date": "2026-09-18",
+    "status": "open",
+    "total_ht": "480.00",
+    "lines": [
+      {
+        "description": "Intervention dépannage pompe à chaleur",
+        "quantity": "1",
+        "unit_price": "480.00",
+        "amount_ht": "480.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0109",
+    "supplier_code": "SUP-003",
+    "order_date": "2026-09-20",
+    "status": "open",
+    "total_ht": "2200.00",
+    "lines": [
+      {
+        "description": "Atelier de formation management (jours)",
+        "quantity": "2",
+        "unit_price": "1100.00",
+        "amount_ht": "2200.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0110",
+    "supplier_code": "SUP-004",
+    "order_date": "2026-09-22",
+    "status": "open",
+    "total_ht": "640.00",
+    "lines": [
+      {
+        "description": "Location sonorisation événement",
+        "quantity": "1",
+        "unit_price": "640.00",
+        "amount_ht": "640.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0111",
+    "supplier_code": "SUP-006",
+    "order_date": "2026-09-25",
+    "status": "open",
+    "total_ht": "357.00",
+    "lines": [
+      {
+        "description": "Kakémonos 85 x 200 cm",
+        "quantity": "3",
+        "unit_price": "119.00",
+        "amount_ht": "357.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0112",
+    "supplier_code": "SUP-005",
+    "order_date": "2026-09-28",
+    "status": "open",
+    "total_ht": "880.00",
+    "lines": [
+      {
+        "description": "Buffet cocktail (personnes)",
+        "quantity": "40",
+        "unit_price": "22.00",
+        "amount_ht": "880.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0113",
+    "supplier_code": "SUP-002",
+    "order_date": "2026-10-01",
+    "status": "open",
+    "total_ht": "300.00",
+    "lines": [
+      {
+        "description": "Remplacement filtres CTA",
+        "quantity": "8",
+        "unit_price": "37.50",
+        "amount_ht": "300.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0114",
+    "supplier_code": "SUP-003",
+    "order_date": "2026-10-02",
+    "status": "open",
+    "total_ht": "3800.00",
+    "lines": [
+      {
+        "description": "Audit des processus achats (jours)",
+        "quantity": "4",
+        "unit_price": "950.00",
+        "amount_ht": "3800.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0115",
+    "supplier_code": "SUP-002",
+    "order_date": "2026-10-04",
+    "status": "open",
+    "total_ht": "1250.00",
+    "lines": [
+      {
+        "description": "Maintenance préventive annuelle",
+        "quantity": "1",
+        "unit_price": "1250.00",
+        "amount_ht": "1250.00"
+      }
+    ]
+  }
+]

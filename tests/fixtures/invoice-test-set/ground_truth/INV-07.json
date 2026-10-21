@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-07",
+  "title": "Nominal, arrondi (40 x 3,35)",
+  "file": "invoices/INV-07_PM-2026-0512_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "PM-2026-0512",
+    "issue_date": "2026-09-24",
+    "due_date": "2026-10-24",
+    "currency": "EUR",
+    "seller": {
+      "name": "Papeterie Mercier SARL",
+      "siren": "151757747",
+      "vat_number": "FR67151757747"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0107",
+    "iban": "FR7699053965263585803695442",
+    "lines": [
+      {
+        "description": "Classeurs à levier dos 75 mm",
+        "quantity": "40",
+        "unit_price": "3.35",
+        "vat_rate": "20.00",
+        "amount_ht": "134.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "134.00",
+        "vat": "26.80"
+      }
+    ],
+    "total_ht": "134.00",
+    "total_vat": "26.80",
+    "total_ttc": "160.80"
+  },
+  "expected_supplier_code": "SUP-001",
+  "expected_po_match": "PO-2026-0107",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-24",
+    "reference": "PM-2026-0512",
+    "lines": [
+      {
+        "account": "6064",
+        "label": "Fournitures administratives",
+        "debit": "134.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "26.80",
+        "credit": "0.00"
+      },
+      {
+        "account": "401MERC",
+        "label": "Papeterie Mercier SARL",
+        "debit": "0.00",
+        "credit": "160.80"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

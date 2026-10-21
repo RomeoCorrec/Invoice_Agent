@@ -1,0 +1,53 @@
+{
+  "case_id": "INV-18",
+  "title": "Anomalie : IBAN différent du référentiel",
+  "file": "invoices/INV-18_IV-2026-3412_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "IV-2026-3412",
+    "issue_date": "2026-10-12",
+    "due_date": "2026-11-11",
+    "currency": "EUR",
+    "seller": {
+      "name": "Imprimerie Vasseur & Fils",
+      "siren": "689132868",
+      "vat_number": "FR77689132868"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": null,
+    "iban": "FR7699546325778456691797437",
+    "lines": [
+      {
+        "description": "Brochures A5 quadri (lot de 500)",
+        "quantity": "2",
+        "unit_price": "312.00",
+        "vat_rate": "20.00",
+        "amount_ht": "624.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "624.00",
+        "vat": "124.80"
+      }
+    ],
+    "total_ht": "624.00",
+    "total_vat": "124.80",
+    "total_ttc": "748.80"
+  },
+  "expected_supplier_code": "SUP-006",
+  "expected_po_match": null,
+  "expected_anomalies": [
+    "IBAN_MISMATCH",
+    "NO_PO_MATCH"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Scénario classique de fraude au changement de RIB. Pas de commande associée."
+}

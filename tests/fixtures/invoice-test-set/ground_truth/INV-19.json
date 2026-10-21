@@ -1,0 +1,53 @@
+{
+  "case_id": "INV-19",
+  "title": "Anomalie : SIREN invalide (clé de Luhn)",
+  "file": "invoices/INV-19_PM-2026-0533_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "PM-2026-0533",
+    "issue_date": "2026-10-13",
+    "due_date": "2026-11-12",
+    "currency": "EUR",
+    "seller": {
+      "name": "Papeterie Mercier SARL",
+      "siren": "151757748",
+      "vat_number": "FR67151757747"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": null,
+    "iban": "FR7699053965263585803695442",
+    "lines": [
+      {
+        "description": "Stylos gel noirs (boîte de 12)",
+        "quantity": "4",
+        "unit_price": "8.50",
+        "vat_rate": "20.00",
+        "amount_ht": "34.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "34.00",
+        "vat": "6.80"
+      }
+    ],
+    "total_ht": "34.00",
+    "total_vat": "6.80",
+    "total_ttc": "40.80"
+  },
+  "expected_supplier_code": "SUP-001",
+  "expected_po_match": null,
+  "expected_anomalies": [
+    "INVALID_SIREN",
+    "NO_PO_MATCH"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "SIREN du vendeur avec un chiffre modifié : la clé de Luhn ne passe plus. Le nom et le numéro de TVA restent ceux du fournisseur connu."
+}

@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-09",
+  "title": "PDF sans XML, nominal",
+  "file": "invoices/INV-09_DC-2026-101_pdf.pdf",
+  "format": "pdf_text_only",
+  "expected_extraction": {
+    "invoice_number": "DC/2026/101",
+    "issue_date": "2026-10-02",
+    "due_date": "2026-11-01",
+    "currency": "EUR",
+    "seller": {
+      "name": "Cabinet Delorme Conseil",
+      "siren": "586323263",
+      "vat_number": "FR28586323263"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0109",
+    "iban": "FR7699065841650681552315323",
+    "lines": [
+      {
+        "description": "Atelier de formation management (jours)",
+        "quantity": "2",
+        "unit_price": "1100.00",
+        "vat_rate": "20.00",
+        "amount_ht": "2200.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "2200.00",
+        "vat": "440.00"
+      }
+    ],
+    "total_ht": "2200.00",
+    "total_vat": "440.00",
+    "total_ttc": "2640.00"
+  },
+  "expected_supplier_code": "SUP-003",
+  "expected_po_match": "PO-2026-0109",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-10-02",
+    "reference": "DC/2026/101",
+    "lines": [
+      {
+        "account": "6226",
+        "label": "Honoraires",
+        "debit": "2200.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "440.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401DELO",
+        "label": "Cabinet Delorme Conseil",
+        "debit": "0.00",
+        "credit": "2640.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}
