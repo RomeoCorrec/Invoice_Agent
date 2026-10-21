@@ -1,0 +1,14 @@
+[project]
+name = "invoice-agent"
+version = "0.0.0"
+description = "Agentic system that processes supplier invoices for small French businesses."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/invoice_agent"]
