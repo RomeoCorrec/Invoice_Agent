@@ -5,7 +5,10 @@ description = "Agentic system that processes supplier invoices for small French 
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "alembic>=1.20.0",
+    "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.1",
+    "sqlalchemy>=2.1.6",
 ]
 
 [build-system]
@@ -22,6 +25,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "testcontainers[postgres]>=4.15.0",
 ]
 
 [tool.ruff]
