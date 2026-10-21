@@ -1,0 +1,81 @@
+{
+  "case_id": "INV-04",
+  "title": "Nominal, location 2 lignes",
+  "file": "invoices/INV-04_LP-0098812_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "LP-0098812",
+    "issue_date": "2026-09-19",
+    "due_date": "2026-10-19",
+    "currency": "EUR",
+    "seller": {
+      "name": "Loca'Pro Matériel SAS",
+      "siren": "623671427",
+      "vat_number": "FR14623671427"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0104",
+    "iban": "FR7699564167888709841081737",
+    "lines": [
+      {
+        "description": "Location vidéoprojecteur (semaine)",
+        "quantity": "2",
+        "unit_price": "180.00",
+        "vat_rate": "20.00",
+        "amount_ht": "360.00"
+      },
+      {
+        "description": "Location écran mobile (semaine)",
+        "quantity": "2",
+        "unit_price": "65.00",
+        "vat_rate": "20.00",
+        "amount_ht": "130.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "490.00",
+        "vat": "98.00"
+      }
+    ],
+    "total_ht": "490.00",
+    "total_vat": "98.00",
+    "total_ttc": "588.00"
+  },
+  "expected_supplier_code": "SUP-004",
+  "expected_po_match": "PO-2026-0104",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-19",
+    "reference": "LP-0098812",
+    "lines": [
+      {
+        "account": "6135",
+        "label": "Locations mobilières",
+        "debit": "490.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "98.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401LOCA",
+        "label": "Loca'Pro Matériel SAS",
+        "debit": "0.00",
+        "credit": "588.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

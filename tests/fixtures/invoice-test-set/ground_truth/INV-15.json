@@ -1,0 +1,60 @@
+{
+  "case_id": "INV-15",
+  "title": "Anomalie : fournisseur inconnu",
+  "file": "invoices/INV-15_NE-2026-0077_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "NE-2026-0077",
+    "issue_date": "2026-10-08",
+    "due_date": "2026-11-07",
+    "currency": "EUR",
+    "seller": {
+      "name": "Nordis Équipements SAS",
+      "siren": "963203419",
+      "vat_number": "FR57963203419"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": null,
+    "iban": "FR7699048536196013316272541",
+    "lines": [
+      {
+        "description": "Transpalette manuel 2 t",
+        "quantity": "2",
+        "unit_price": "389.00",
+        "vat_rate": "20.00",
+        "amount_ht": "778.00"
+      },
+      {
+        "description": "Livraison",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "823.00",
+        "vat": "164.60"
+      }
+    ],
+    "total_ht": "823.00",
+    "total_vat": "164.60",
+    "total_ttc": "987.60"
+  },
+  "expected_supplier_code": null,
+  "expected_po_match": null,
+  "expected_anomalies": [
+    "NO_PO_MATCH",
+    "UNKNOWN_SUPPLIER"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "SIREN valide mais absent du référentiel, aucune commande."
+}

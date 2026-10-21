@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-06",
+  "title": "Nominal, montant élevé",
+  "file": "invoices/INV-06_IV-2026-3301_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "IV-2026-3301",
+    "issue_date": "2026-09-30",
+    "due_date": "2026-10-30",
+    "currency": "EUR",
+    "seller": {
+      "name": "Imprimerie Vasseur & Fils",
+      "siren": "689132868",
+      "vat_number": "FR77689132868"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0106",
+    "iban": "FR7699470095021252774786577",
+    "lines": [
+      {
+        "description": "Brochures A5 quadri (lot de 500)",
+        "quantity": "4",
+        "unit_price": "312.00",
+        "vat_rate": "20.00",
+        "amount_ht": "1248.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "1248.00",
+        "vat": "249.60"
+      }
+    ],
+    "total_ht": "1248.00",
+    "total_vat": "249.60",
+    "total_ttc": "1497.60"
+  },
+  "expected_supplier_code": "SUP-006",
+  "expected_po_match": "PO-2026-0106",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-30",
+    "reference": "IV-2026-3301",
+    "lines": [
+      {
+        "account": "6236",
+        "label": "Catalogues et imprimés",
+        "debit": "1248.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "249.60",
+        "credit": "0.00"
+      },
+      {
+        "account": "401VASS",
+        "label": "Imprimerie Vasseur & Fils",
+        "debit": "0.00",
+        "credit": "1497.60"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

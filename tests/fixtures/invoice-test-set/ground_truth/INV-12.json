@@ -1,0 +1,52 @@
+{
+  "case_id": "INV-12",
+  "title": "Anomalie : montant de TVA faux",
+  "file": "invoices/INV-12_CDA-26-0466_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "CDA-26-0466",
+    "issue_date": "2026-10-06",
+    "due_date": "2026-11-05",
+    "currency": "EUR",
+    "seller": {
+      "name": "Café des Ateliers SARL",
+      "siren": "850223454",
+      "vat_number": "FR84850223454"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0112",
+    "iban": "FR7699061508882043304951471",
+    "lines": [
+      {
+        "description": "Buffet cocktail (personnes)",
+        "quantity": "40",
+        "unit_price": "22.00",
+        "vat_rate": "10.00",
+        "amount_ht": "880.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "10.00",
+        "basis": "880.00",
+        "vat": "96.80"
+      }
+    ],
+    "total_ht": "880.00",
+    "total_vat": "96.80",
+    "total_ttc": "976.80"
+  },
+  "expected_supplier_code": "SUP-005",
+  "expected_po_match": "PO-2026-0112",
+  "expected_anomalies": [
+    "VAT_AMOUNT_MISMATCH"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Base 880,00 à 10 % : TVA attendue 88,00, facturée 96,80. Le TTC = HT + TVA facturée (cohérent avec l'erreur)."
+}

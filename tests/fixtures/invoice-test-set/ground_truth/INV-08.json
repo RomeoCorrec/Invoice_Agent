@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-08",
+  "title": "Nominal, sans référence de commande (rapprochement heuristique)",
+  "file": "invoices/INV-08_CT-26-1301_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "CT-26-1301",
+    "issue_date": "2026-09-25",
+    "due_date": "2026-10-25",
+    "currency": "EUR",
+    "seller": {
+      "name": "ClimaTech Maintenance SAS",
+      "siren": "419058185",
+      "vat_number": "FR53419058185"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": null,
+    "iban": "FR7699370471326409308966394",
+    "lines": [
+      {
+        "description": "Intervention dépannage pompe à chaleur",
+        "quantity": "1",
+        "unit_price": "480.00",
+        "vat_rate": "20.00",
+        "amount_ht": "480.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "480.00",
+        "vat": "96.00"
+      }
+    ],
+    "total_ht": "480.00",
+    "total_vat": "96.00",
+    "total_ttc": "576.00"
+  },
+  "expected_supplier_code": "SUP-002",
+  "expected_po_match": "PO-2026-0108",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-25",
+    "reference": "CT-26-1301",
+    "lines": [
+      {
+        "account": "6156",
+        "label": "Maintenance",
+        "debit": "480.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "96.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401CLIM",
+        "label": "ClimaTech Maintenance SAS",
+        "debit": "0.00",
+        "credit": "576.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Pas de BuyerOrderReference : le rapprochement doit se faire par fournisseur + montant."
+}

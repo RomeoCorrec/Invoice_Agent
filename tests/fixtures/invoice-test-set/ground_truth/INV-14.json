@@ -1,0 +1,60 @@
+{
+  "case_id": "INV-14",
+  "title": "Anomalie : doublon de INV-01 (même numéro, renvoyée)",
+  "file": "invoices/INV-14_PM-2026-0457_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "PM-2026-0457",
+    "issue_date": "2026-09-10",
+    "due_date": "2026-10-10",
+    "currency": "EUR",
+    "seller": {
+      "name": "Papeterie Mercier SARL",
+      "siren": "151757747",
+      "vat_number": "FR67151757747"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0101",
+    "iban": "FR7699053965263585803695442",
+    "lines": [
+      {
+        "description": "Ramettes papier A4 80 g (carton de 5)",
+        "quantity": "10",
+        "unit_price": "24.90",
+        "vat_rate": "20.00",
+        "amount_ht": "249.00"
+      },
+      {
+        "description": "Stylos gel noirs (boîte de 12)",
+        "quantity": "6",
+        "unit_price": "8.50",
+        "vat_rate": "20.00",
+        "amount_ht": "51.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "300.00",
+        "vat": "60.00"
+      }
+    ],
+    "total_ht": "300.00",
+    "total_vat": "60.00",
+    "total_ttc": "360.00"
+  },
+  "expected_supplier_code": "SUP-001",
+  "expected_po_match": "PO-2026-0101",
+  "expected_anomalies": [
+    "DUPLICATE_INVOICE",
+    "PO_ALREADY_INVOICED"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": "INV-01",
+  "prompt_injection": false,
+  "comment": "À traiter APRÈS INV-01. Contenu identique à INV-01."
+}

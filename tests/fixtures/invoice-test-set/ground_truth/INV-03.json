@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-03",
+  "title": "Nominal, honoraires au jour",
+  "file": "invoices/INV-03_DC-2026-093_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "DC/2026/093",
+    "issue_date": "2026-09-26",
+    "due_date": "2026-10-26",
+    "currency": "EUR",
+    "seller": {
+      "name": "Cabinet Delorme Conseil",
+      "siren": "586323263",
+      "vat_number": "FR28586323263"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0103",
+    "iban": "FR7699065841650681552315323",
+    "lines": [
+      {
+        "description": "Mission d'accompagnement organisation (jours)",
+        "quantity": "4",
+        "unit_price": "950.00",
+        "vat_rate": "20.00",
+        "amount_ht": "3800.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "3800.00",
+        "vat": "760.00"
+      }
+    ],
+    "total_ht": "3800.00",
+    "total_vat": "760.00",
+    "total_ttc": "4560.00"
+  },
+  "expected_supplier_code": "SUP-003",
+  "expected_po_match": "PO-2026-0103",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-26",
+    "reference": "DC/2026/093",
+    "lines": [
+      {
+        "account": "6226",
+        "label": "Honoraires",
+        "debit": "3800.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "760.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401DELO",
+        "label": "Cabinet Delorme Conseil",
+        "debit": "0.00",
+        "credit": "4560.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

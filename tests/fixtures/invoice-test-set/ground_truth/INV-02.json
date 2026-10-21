@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-02",
+  "title": "Nominal, prestation unique",
+  "file": "invoices/INV-02_CT-26-1188_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "CT-26-1188",
+    "issue_date": "2026-09-12",
+    "due_date": "2026-10-12",
+    "currency": "EUR",
+    "seller": {
+      "name": "ClimaTech Maintenance SAS",
+      "siren": "419058185",
+      "vat_number": "FR53419058185"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0102",
+    "iban": "FR7699370471326409308966394",
+    "lines": [
+      {
+        "description": "Contrat de maintenance climatisation, trimestre 4",
+        "quantity": "1",
+        "unit_price": "1250.00",
+        "vat_rate": "20.00",
+        "amount_ht": "1250.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "1250.00",
+        "vat": "250.00"
+      }
+    ],
+    "total_ht": "1250.00",
+    "total_vat": "250.00",
+    "total_ttc": "1500.00"
+  },
+  "expected_supplier_code": "SUP-002",
+  "expected_po_match": "PO-2026-0102",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-09-12",
+    "reference": "CT-26-1188",
+    "lines": [
+      {
+        "account": "6156",
+        "label": "Maintenance",
+        "debit": "1250.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "250.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401CLIM",
+        "label": "ClimaTech Maintenance SAS",
+        "debit": "0.00",
+        "credit": "1500.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": ""
+}

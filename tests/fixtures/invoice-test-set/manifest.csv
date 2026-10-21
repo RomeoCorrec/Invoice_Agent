@@ -1,0 +1,22 @@
+case_id,file,format,title,expected_status,expected_anomalies,expected_po_match,total_ttc
+INV-01,INV-01_PM-2026-0457_facturx.pdf,facturx_en16931,"Nominal, 2 lignes, TVA 20 %",validated,,PO-2026-0101,360.00
+INV-02,INV-02_CT-26-1188_facturx.pdf,facturx_en16931,"Nominal, prestation unique",validated,,PO-2026-0102,1500.00
+INV-03,INV-03_DC-2026-093_facturx.pdf,facturx_en16931,"Nominal, honoraires au jour",validated,,PO-2026-0103,4560.00
+INV-04,INV-04_LP-0098812_facturx.pdf,facturx_en16931,"Nominal, location 2 lignes",validated,,PO-2026-0104,588.00
+INV-05,INV-05_CDA-26-0412_facturx.pdf,facturx_en16931,"Nominal, deux taux de TVA (10 % et 20 %)",validated,,PO-2026-0105,639.60
+INV-06,INV-06_IV-2026-3301_facturx.pdf,facturx_en16931,"Nominal, montant élevé",validated,,PO-2026-0106,1497.60
+INV-07,INV-07_PM-2026-0512_facturx.pdf,facturx_en16931,"Nominal, arrondi (40 x 3,35)",validated,,PO-2026-0107,160.80
+INV-08,INV-08_CT-26-1301_facturx.pdf,facturx_en16931,"Nominal, sans référence de commande (rapprochement heuristique)",validated,,PO-2026-0108,576.00
+INV-09,INV-09_DC-2026-101_pdf.pdf,pdf_text_only,"PDF sans XML, nominal",validated,,PO-2026-0109,2640.00
+INV-10,INV-10_LP-0099140_pdf.pdf,pdf_text_only,"PDF sans XML, nominal",validated,,PO-2026-0110,768.00
+INV-11,INV-11_IV-2026-3388_pdf.pdf,pdf_text_only,"PDF sans XML, nominal",validated,,PO-2026-0111,428.40
+INV-12,INV-12_CDA-26-0466_facturx.pdf,facturx_en16931,Anomalie : montant de TVA faux,needs_review,VAT_AMOUNT_MISMATCH,PO-2026-0112,976.80
+INV-13,INV-13_CT-26-1352_facturx.pdf,facturx_en16931,Anomalie : total TTC incohérent,needs_review,TOTAL_MISMATCH,PO-2026-0113,390.00
+INV-14,INV-14_PM-2026-0457_facturx.pdf,facturx_en16931,"Anomalie : doublon de INV-01 (même numéro, renvoyée)",needs_review,DUPLICATE_INVOICE;PO_ALREADY_INVOICED,PO-2026-0101,360.00
+INV-15,INV-15_NE-2026-0077_facturx.pdf,facturx_en16931,Anomalie : fournisseur inconnu,needs_review,NO_PO_MATCH;UNKNOWN_SUPPLIER,,987.60
+INV-16,INV-16_DC-2026-112_facturx.pdf,facturx_en16931,Anomalie : montant supérieur à la commande,needs_review,AMOUNT_EXCEEDS_PO,PO-2026-0114,5700.00
+INV-17,INV-17_LP-0099301_facturx.pdf,facturx_en16931,Anomalie : commande introuvable,needs_review,PO_NOT_FOUND,,216.00
+INV-18,INV-18_IV-2026-3412_facturx.pdf,facturx_en16931,Anomalie : IBAN différent du référentiel,needs_review,IBAN_MISMATCH;NO_PO_MATCH,,748.80
+INV-19,INV-19_PM-2026-0533_facturx.pdf,facturx_en16931,Anomalie : SIREN invalide (clé de Luhn),needs_review,INVALID_SIREN;NO_PO_MATCH,,40.80
+INV-20,INV-20_CT-26-1377_facturx.pdf,facturx_en16931,Injection dans un libellé (Factur-X) + dépassement de commande,needs_review,AMOUNT_EXCEEDS_PO;PROMPT_INJECTION_SUSPECTED,PO-2026-0115,1860.00
+INV-21,INV-21_LP-0099355_pdf.pdf,pdf_text_only,Injection dans une note (PDF sans XML),needs_review,PO_ALREADY_INVOICED;PROMPT_INJECTION_SUSPECTED,PO-2026-0110,768.00

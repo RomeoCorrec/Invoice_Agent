@@ -1,0 +1,52 @@
+{
+  "case_id": "INV-16",
+  "title": "Anomalie : montant supérieur à la commande",
+  "file": "invoices/INV-16_DC-2026-112_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "DC/2026/112",
+    "issue_date": "2026-10-09",
+    "due_date": "2026-11-08",
+    "currency": "EUR",
+    "seller": {
+      "name": "Cabinet Delorme Conseil",
+      "siren": "586323263",
+      "vat_number": "FR28586323263"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0114",
+    "iban": "FR7699065841650681552315323",
+    "lines": [
+      {
+        "description": "Audit des processus achats (jours)",
+        "quantity": "5",
+        "unit_price": "950.00",
+        "vat_rate": "20.00",
+        "amount_ht": "4750.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "4750.00",
+        "vat": "950.00"
+      }
+    ],
+    "total_ht": "4750.00",
+    "total_vat": "950.00",
+    "total_ttc": "5700.00"
+  },
+  "expected_supplier_code": "SUP-003",
+  "expected_po_match": "PO-2026-0114",
+  "expected_anomalies": [
+    "AMOUNT_EXCEEDS_PO"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Commande PO-2026-0114 : 4 jours (3 800,00 HT). Facture : 5 jours (4 750,00 HT)."
+}
