@@ -30,3 +30,6 @@ evals/results/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Personal notes, not part of the repo
+/PROMPTS.md
