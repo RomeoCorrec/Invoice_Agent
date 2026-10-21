@@ -4,7 +4,9 @@ version = "0.0.0"
 description = "Agentic system that processes supplier invoices for small French businesses."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "pydantic>=2.14.1",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -34,6 +36,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+plugins = ["pydantic.mypy"]
 mypy_path = "src"
 
 [tool.pytest.ini_options]
