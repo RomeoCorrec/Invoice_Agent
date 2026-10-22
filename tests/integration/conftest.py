@@ -10,6 +10,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session
 from testcontainers.community.postgres import PostgresContainer
 
 ROOT = Path(__file__).parents[2]
@@ -51,3 +52,11 @@ def _empty_tables(request: pytest.FixtureRequest) -> Iterator[None]:
             )
         ).scalar_one()
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
+
+
+@pytest.fixture
+def session(engine: Engine) -> Iterator[Session]:
+    """A session whose uncommitted work is rolled back at the end of the test."""
+    with Session(engine) as session:
+        yield session
+        session.rollback()
