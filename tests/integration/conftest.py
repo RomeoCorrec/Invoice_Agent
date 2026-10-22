@@ -1,0 +1,53 @@
+"""Real PostgreSQL for integration tests (one container per session, via testcontainers).
+
+The schema is created by running the Alembic migrations, so they are tested too.
+"""
+
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import Engine, create_engine, text
+from testcontainers.community.postgres import PostgresContainer
+
+ROOT = Path(__file__).parents[2]
+
+
+def alembic_config(url: str) -> Config:
+    config = Config(str(ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(ROOT / "migrations"))
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    return config
+
+
+@pytest.fixture(scope="session")
+def postgres_url() -> Iterator[str]:
+    with PostgresContainer("postgres:16", driver="psycopg") as container:
+        yield container.get_connection_url()
+
+
+@pytest.fixture(scope="session")
+def engine(postgres_url: str) -> Iterator[Engine]:
+    command.upgrade(alembic_config(postgres_url), "head")
+    engine = create_engine(postgres_url)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _empty_tables(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Start every test from empty tables (TRUNCATE is not blocked by append-only triggers)."""
+    yield
+    if "engine" not in request.fixturenames:
+        return
+    engine: Engine = request.getfixturevalue("engine")
+    with engine.begin() as connection:
+        tables = connection.execute(
+            text(
+                "SELECT string_agg(quote_ident(tablename), ', ') FROM pg_tables "
+                "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
+            )
+        ).scalar_one()
+        connection.execute(text(f"TRUNCATE {tables} CASCADE"))
