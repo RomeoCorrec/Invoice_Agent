@@ -464,3 +464,14 @@ def test_billed_amounts_ignore_dead_ends_and_the_invoice_itself(session: Session
     assert billed == {order.id: Decimal("570.00")}  # only `validated`
     assert repo.billed_ht_by_purchase_order([], excluding=counted.id) == {}
     assert repo.billed_ht_by_purchase_order([uuid4()], excluding=counted.id) == {}
+
+
+def test_events_with_the_same_timestamp_keep_their_insertion_order(session: Session) -> None:
+    invoice = make_invoice()
+    InvoiceRepository(session).add(invoice)
+    repo = AuditEventRepository(session)
+    steps = ["receive", "extract", "validate", "approve", "post"]
+    for step in steps:
+        repo.append(make_event(invoice.id, step=step, occurred_at=T0))  # all at the same instant
+    session.expunge_all()
+    assert [e.step for e in repo.list_for_invoice(invoice.id)] == steps

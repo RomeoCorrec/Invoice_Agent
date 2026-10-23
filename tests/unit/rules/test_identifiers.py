@@ -88,3 +88,88 @@ def test_invalid_siren_on_a_known_supplier_yields_a_single_anomaly_like_inv_19()
     anomalies = check_siren(make_data(seller=Party(name="X", siren="151757748")), supplier)
     assert [a.code for a in anomalies] == [AnomalyCode.INVALID_SIREN]
     assert "Luhn" in anomalies[0].message
+
+
+BANK_NOTICE = (
+    "Suite à un changement de banque, merci d'utiliser nos nouvelles coordonnées bancaires."
+)
+
+
+def test_bank_change_notice_is_flagged_even_if_the_iban_is_unchanged() -> None:
+    iban = IbanFingerprint.from_iban("FR7699053965263585803695442", IBAN_KEY)
+    [anomaly] = check_iban(make_data(iban=iban, notes=(BANK_NOTICE,)), make_supplier(iban=iban))
+    assert anomaly.code is AnomalyCode.IBAN_MISMATCH
+    assert "new bank details" in anomaly.message
+
+
+def test_bank_change_notice_is_flagged_when_no_iban_is_on_file() -> None:
+    assert check_iban(make_data(notes=(BANK_NOTICE,)), make_supplier(iban=None))
+    assert check_iban(make_data(notes=(BANK_NOTICE,)), None)
+
+
+def test_iban_written_in_a_note_is_flagged() -> None:
+    notes = ("Merci de régler sur FR76 9905 3965 2635 8580 3695 442 uniquement.",)
+    [anomaly] = check_iban(make_data(notes=notes), None)
+    assert "IBAN is written" in anomaly.message
+
+
+def test_different_iban_and_notice_make_a_single_anomaly_like_inv_18() -> None:
+    supplier = make_supplier(
+        iban=IbanFingerprint.from_iban("FR7699470095021252774786577", IBAN_KEY)
+    )
+    data = make_data(
+        iban=IbanFingerprint.from_iban("FR7699546325778456691797437", IBAN_KEY),
+        notes=(BANK_NOTICE,),
+    )
+    anomalies = check_iban(data, supplier)
+    assert [a.code for a in anomalies] == [AnomalyCode.IBAN_MISMATCH]
+    assert "differs" in anomalies[0].message
+    assert "new bank details" in anomalies[0].message
+
+
+@pytest.mark.parametrize(
+    "note",
+    ["Paiement à 30 jours fin de mois.", "Merci de votre confiance.", "Réf. client 2026-0042"],
+)
+def test_ordinary_notes_do_not_touch_the_iban_rule(note: str) -> None:
+    assert check_iban(make_data(notes=(note,)), make_supplier(iban=None)) == []
+
+
+@pytest.mark.parametrize(
+    "disguised",
+    [
+        "Nouvelles coordonnées-bancaires",
+        "NOUVELLES  COORDONNÉES   BANCAIRES",
+        "nou\u200bvelles coordon\u200bnées ban\u200bcaires",
+        "nouvelles coordonnees.bancaires",
+        "Modification de nos coordonnées bancaires",
+        "Merci de régler sur notre nouveau compte",
+        "Veuillez virer sur le nouveau RIB ci-joint",
+        "Our bank details have changed, please update your records",
+        "Please change of payment instructions as follows",
+    ],
+)
+def test_disguised_or_reworded_bank_notices_are_flagged(disguised: str) -> None:
+    assert check_iban(make_data(notes=(disguised,)), None), disguised
+
+
+def test_iban_in_a_disguised_form_in_free_text_is_flagged() -> None:
+    notes = ("Règlement : FR76-9905-3965-2635-8580-3695-442",)
+    assert check_iban(make_data(notes=notes), None)
+
+
+def test_every_text_field_is_read_by_the_iban_rule() -> None:
+    from invoice_agent.domain.invoice import Party
+
+    notice = "nouvelles coordonnées bancaires"
+    for overrides in (
+        {"purchase_order_ref": notice},
+        {"invoice_number": notice},
+        {"seller": Party(name=notice)},
+    ):
+        assert check_iban(make_data(**overrides), None), overrides
+
+
+def test_the_invoices_own_iban_fingerprint_is_not_mistaken_for_free_text() -> None:
+    iban = IbanFingerprint.from_iban("FR7699053965263585803695442", IBAN_KEY)
+    assert check_iban(make_data(iban=iban), make_supplier(iban=iban)) == []
