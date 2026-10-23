@@ -161,22 +161,6 @@ wheels = [
 ]
 
 [[package]]
-name = "factur-x"
-version = "7.7"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "iso4217" },
-    { name = "lxml" },
-    { name = "pypdf" },
-    { name = "python-stdnum" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/11/7f/b7a760045cb2cfe0b2c62544b345622a23897d21536ceb721ad3fb79dce3/factur_x-7.7.tar.gz", hash = "sha256:242ba2944d17d6f099affac209c649ee2f3885fbd2329f3597c620e48e4b7013", size = 1149128, upload-time = "2026-10-14T21:59:02.871Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/58/893562e1bac4e0aa64a416fedf57ee4673820dce50824d7720027d62ba51/factur_x-7.7-py3-none-any.whl", hash = "sha256:45829801f14fefc5d617de4f42d0ba0ab0c624971f109c750811e8eae205291b", size = 934082, upload-time = "2026-10-14T21:59:01.219Z" },
-]
-
-[[package]]
 name = "filelock"
 version = "4.2.4"
 source = { registry = "https://pypi.org/simple" }
@@ -218,7 +202,7 @@ version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
-    { name = "factur-x" },
+    { name = "lxml" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pypdf" },
@@ -238,7 +222,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
-    { name = "factur-x", specifier = ">=7.7" },
+    { name = "lxml", specifier = ">=6.1.3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic", specifier = ">=2.14.1" },
     { name = "pypdf", specifier = ">=6.21.2" },
@@ -253,15 +237,6 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "ruff" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.15.0" },
-]
-
-[[package]]
-name = "iso4217"
-version = "1.16.20260101"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/43/98/a5f28006515c24de82c3d76f79e13dd3fbdf71431fdb158505ee45008908/iso4217-1.16.20260101.tar.gz", hash = "sha256:6a5afba6acb01cad8045f81e2b96f6adbea04f0c524ae21f317ac4ca11c3bdd6", size = 13695, upload-time = "2026-03-03T15:28:36.013Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/5b/725a6980401169ba9115f0b837d3af09134e43eaed9b2bebd8dbb50df733/iso4217-1.16.20260101-py2.py3-none-any.whl", hash = "sha256:69c591b93c7d783ec8c309ebee8df1aa28f8403d44bcce518ae8db050462084b", size = 11991, upload-time = "2026-03-03T15:28:34.523Z" },
 ]
 
 [[package]]
@@ -587,15 +562,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/74/26/2fbeedb218a787a5eea551c7532cac4e009f83d689dd2faa0d0353473f86/python_dotenv-1.2.4.tar.gz", hash = "sha256:f0d53e69935a851c0dcc78f3ab7aaccd8cabef0b92382b576b824212902873c0", size = 60824, upload-time = "2026-10-01T05:36:10Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/d1/38f3a3405989a89ac18390803e70c6ad7c7760da4f9b83cbeca0c44a0c72/python_dotenv-1.2.4-py3-none-any.whl", hash = "sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc", size = 23266, upload-time = "2026-10-01T05:36:08.633Z" },
-]
-
-[[package]]
-name = "python-stdnum"
-version = "2.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/15/7f/96c2b9de6024353177dc6139c33730d5ac25877bc33215515d6b95b84555/python_stdnum-2.2.tar.gz", hash = "sha256:e95fcfa858a703d4a40130cb3eaac133c60d8808a7f3c98efeedac968c2479b9", size = 1311813, upload-time = "2026-01-04T19:36:16.753Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/61/aa32d9c79f83a2fae033cd6496fb2a24aba918d31c73704271dfcfb48375/python_stdnum-2.2-py3-none-any.whl", hash = "sha256:bdf98fd117a0ca152e4047aa8ad254bae63853d4e915ddd4e0effb33ba0e9260", size = 1193213, upload-time = "2026-01-04T19:36:14.812Z" },
 ]
 
 [[package]]
