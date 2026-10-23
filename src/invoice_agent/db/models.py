@@ -23,8 +23,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from invoice_agent.db.base import MONEY, QUANTITY, RATE, Base, in_values
@@ -156,6 +157,7 @@ class InvoiceRow(Base):
     purchase_order_ref: Mapped[str | None] = mapped_column(Text)
     iban_masked: Mapped[str | None] = mapped_column(String(32))
     iban_hash: Mapped[str | None] = mapped_column(String(64))
+    notes: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     total_ht: Mapped[Decimal | None] = mapped_column(MONEY)
     total_vat: Mapped[Decimal | None] = mapped_column(MONEY)
     total_ttc: Mapped[Decimal | None] = mapped_column(MONEY)

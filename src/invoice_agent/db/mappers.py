@@ -151,6 +151,7 @@ def apply_invoice(row: InvoiceRow, invoice: Invoice) -> None:
     row.purchase_order_ref = data.purchase_order_ref if data else None
     row.iban_masked = data.iban.masked if data and data.iban else None
     row.iban_hash = data.iban.digest if data and data.iban else None
+    row.notes = list(data.notes) if data else []
     row.total_ht = data.total_ht if data else None
     row.total_vat = data.total_vat if data else None
     row.total_ttc = data.total_ttc if data else None
@@ -217,6 +218,7 @@ def _invoice_data(row: InvoiceRow) -> InvoiceData | None:
         buyer=buyer,
         purchase_order_ref=row.purchase_order_ref,
         iban=_fingerprint(row.iban_masked, row.iban_hash),
+        notes=tuple(row.notes),
         lines=tuple(
             InvoiceLine(
                 description=line.description,

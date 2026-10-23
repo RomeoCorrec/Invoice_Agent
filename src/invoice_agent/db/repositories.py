@@ -3,9 +3,11 @@
 They flush but never commit (see ``session``). Rows are not exposed.
 """
 
+from collections.abc import Collection
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,7 +24,28 @@ from invoice_agent.domain.invoice import Invoice
 from invoice_agent.domain.invoice_status import InvoiceStatus, check_transition
 from invoice_agent.domain.journal import JournalEntry
 from invoice_agent.domain.purchase_order import PurchaseOrder, PurchaseOrderStatus
+from invoice_agent.domain.rules.duplicates import normalize_invoice_number
 from invoice_agent.domain.supplier import Supplier
+
+# Invoices that count against a purchase order: extracted and beyond, minus the dead ends.
+BILLED_STATUSES = (
+    InvoiceStatus.EXTRACTED,
+    InvoiceStatus.VALIDATED,
+    InvoiceStatus.NEEDS_REVIEW,
+    InvoiceStatus.APPROVED,
+    InvoiceStatus.POSTED,
+)
+# Copies that can make a new invoice a duplicate: every live copy (a copy still being
+# extracted already has its source file hash), but not failed ones.
+LIVE_STATUSES = (InvoiceStatus.RECEIVED, *BILLED_STATUSES, InvoiceStatus.REJECTED)
+# Copies that have already been through the checks.
+CHECKED_STATUSES = (
+    InvoiceStatus.VALIDATED,
+    InvoiceStatus.NEEDS_REVIEW,
+    InvoiceStatus.APPROVED,
+    InvoiceStatus.POSTED,
+    InvoiceStatus.REJECTED,
+)
 
 
 class InvoiceNotFoundError(LookupError):
@@ -63,6 +86,9 @@ class SupplierRepository:
 
     def get_by_siren(self, siren: str) -> Supplier | None:
         return self._first(SupplierRow.siren == siren)
+
+    def get_by_vat_number(self, vat_number: str) -> Supplier | None:
+        return self._first(SupplierRow.vat_number == vat_number)
 
     def _first(self, *conditions: ColumnElement[bool]) -> Supplier | None:
         row = self._session.scalars(select(SupplierRow).where(*conditions)).first()
@@ -140,6 +166,66 @@ class InvoiceRepository:
 
     def list_by_status(self, status: InvoiceStatus) -> list[Invoice]:
         return self._many(InvoiceRow.status == status.value)
+
+    def billed_ht_by_purchase_order(
+        self, order_ids: Collection[UUID], *, excluding: UUID
+    ) -> dict[UUID, Decimal]:
+        """HT already invoiced per purchase order, by invoices other than ``excluding``."""
+        if not order_ids:
+            return {}
+        rows = self._session.execute(
+            select(InvoiceRow.purchase_order_id, func.sum(InvoiceRow.total_ht))
+            .where(
+                InvoiceRow.purchase_order_id.in_(order_ids),
+                InvoiceRow.id != excluding,
+                InvoiceRow.status.in_([status.value for status in BILLED_STATUSES]),
+            )
+            .group_by(InvoiceRow.purchase_order_id)
+        )
+        return {
+            order_id: total
+            for order_id, total in rows
+            if order_id is not None and total is not None
+        }
+
+    def find_duplicates(self, invoice: Invoice, *, supplier_id: UUID | None) -> list[Invoice]:
+        """Other invoices that look like the same document, in either direction.
+
+        Same source file, or same invoice number (compared ignoring case and punctuation)
+        from the same seller: the resolved supplier, or the same SIREN or VAT number
+        written on the document, so a copy not yet linked to a supplier is still found.
+
+        A copy received earlier always counts. A copy received later counts only once it
+        has been through the checks: it could not have flagged this one. Together this
+        guarantees that of two copies at least one is flagged, whatever the processing
+        order. Ties on the reception time are broken by id.
+        """
+        earlier = or_(
+            InvoiceRow.received_at < invoice.received_at,
+            and_(InvoiceRow.received_at == invoice.received_at, InvoiceRow.id < invoice.id),
+        )
+        counts = or_(
+            and_(earlier, InvoiceRow.status.in_([s.value for s in LIVE_STATUSES])),
+            and_(~earlier, InvoiceRow.status.in_([s.value for s in CHECKED_STATUSES])),
+        )
+        same_document: list[ColumnElement[bool]] = [
+            InvoiceRow.source_sha256 == invoice.source.sha256
+        ]
+        if invoice.data is not None:
+            seller = invoice.data.seller
+            same_seller: list[ColumnElement[bool]] = []
+            if supplier_id is not None:
+                same_seller.append(InvoiceRow.supplier_id == supplier_id)
+            if seller.siren:
+                same_seller.append(InvoiceRow.seller_siren == seller.siren)
+            if seller.vat_number:
+                same_seller.append(InvoiceRow.seller_vat_number == seller.vat_number)
+            if same_seller:
+                number = func.upper(
+                    func.regexp_replace(InvoiceRow.invoice_number, "[^A-Za-z0-9]", "", "g")
+                ) == normalize_invoice_number(invoice.data.invoice_number)
+                same_document.append(and_(number, or_(*same_seller)))
+        return self._many(InvoiceRow.id != invoice.id, counts, or_(*same_document))
 
     def _many(self, *conditions: ColumnElement[bool]) -> list[Invoice]:
         rows = self._session.scalars(

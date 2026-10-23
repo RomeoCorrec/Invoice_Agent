@@ -23,7 +23,7 @@ from invoice_agent.domain.supplier import Supplier
 
 IBAN_KEY = b"test-key"
 T0 = datetime(2026, 9, 17, 9, 0, tzinfo=UTC)
-GROUND_TRUTH = Path(__file__).parents[1] / "fixtures" / "invoice-test-set" / "ground_truth"
+GROUND_TRUTH = Path(__file__).parent / "fixtures" / "invoice-test-set" / "ground_truth"
 
 
 def make_supplier(**overrides: Any) -> Supplier:

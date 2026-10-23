@@ -18,6 +18,11 @@ IBAN_IN_TEXT = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b")
 """Matches something that looks like an IBAN inside free text (used to keep them out of logs)."""
 
 
+def redact_ibans(text: str) -> str:
+    """Replace anything that looks like an IBAN, so free text can be logged safely."""
+    return IBAN_IN_TEXT.sub("[IBAN redacted]", text)
+
+
 def normalize_iban(raw: str) -> str:
     iban = "".join(raw.split()).upper()
     if not _IBAN_SHAPE.match(iban):

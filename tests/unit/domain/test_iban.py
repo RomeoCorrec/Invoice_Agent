@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from invoice_agent.domain.iban import IBAN_IN_TEXT, IbanFingerprint, hash_iban, mask_iban
+from invoice_agent.domain.iban import (
+    IBAN_IN_TEXT,
+    IbanFingerprint,
+    hash_iban,
+    mask_iban,
+    redact_ibans,
+)
 
 KEY = b"test-key"
 IBAN = "FR7699053965263585803695442"
@@ -56,3 +62,11 @@ def test_iban_in_text_detection() -> None:
     assert IBAN_IN_TEXT.search(f"pay to {IBAN} please")
     assert IBAN_IN_TEXT.search("pay to FR76 9905 3965 2635 8580 3695 442")
     assert not IBAN_IN_TEXT.search("invoice INV-2026-0001 total 12.50")
+
+
+def test_redact_ibans_in_free_text() -> None:
+    text = f"Pay {IBAN} or FR76 9905 3965 2635 8580 3695 442 today, ref INV-2026-0001"
+    redacted = redact_ibans(text)
+    assert "[IBAN redacted]" in redacted
+    assert not IBAN_IN_TEXT.search(redacted)
+    assert "INV-2026-0001" in redacted
