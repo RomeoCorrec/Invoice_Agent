@@ -61,13 +61,24 @@ def find_injection_patterns(texts: Iterable[str]) -> list[str]:
 
 
 def document_texts(data: InvoiceData) -> list[str]:
-    """Every free-text field of the invoice that a model could read."""
-    texts = [line.description for line in data.lines]
-    texts += [data.seller.name, *data.notes]
-    if data.buyer:
-        texts.append(data.buyer.name)
-    if data.purchase_order_ref:
-        texts.append(data.purchase_order_ref)
+    """Every string in the invoice that a model could read, whatever the field.
+
+    Collected generically from the serialised model, so a field added later (or a short one
+    like the invoice number) is covered without touching this function.
+    """
+    texts: list[str] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, str):
+            texts.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    collect(data.model_dump(mode="json"))
     return texts
 
 
