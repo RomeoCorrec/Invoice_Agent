@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import JsonValue, model_validator
 
 from invoice_agent.domain.base import DomainModel
-from invoice_agent.domain.iban import contains_iban
+from invoice_agent.domain.iban import contains_iban, redact_ibans
 from invoice_agent.domain.types import NonEmptyStr, UtcDatetime
 
 
@@ -46,3 +46,17 @@ def _contains_iban(value: JsonValue) -> bool:
             return any(_contains_iban(key) or _contains_iban(item) for key, item in value.items())
         case _:
             return False
+
+
+def redact_payload(value: JsonValue) -> JsonValue:
+    """Redact anything IBAN-like from every string of a payload before it is audited.
+
+    Invoice text can end up in messages, and AuditEvent refuses full IBANs outright.
+    """
+    if isinstance(value, str):
+        return redact_ibans(value)
+    if isinstance(value, list):
+        return [redact_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: redact_payload(item) for key, item in value.items()}
+    return value

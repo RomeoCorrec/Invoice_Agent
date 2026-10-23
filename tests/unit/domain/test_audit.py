@@ -59,3 +59,15 @@ def test_timestamp_is_utc() -> None:
     )
     assert event.occurred_at == datetime(2026, 9, 17, 9, 0, tzinfo=UTC)
     assert event.occurred_at.utcoffset() == timedelta(0)
+
+
+def test_redact_payload_cleans_every_string_so_the_event_can_be_built() -> None:
+    from invoice_agent.domain.audit import redact_payload
+
+    raw = {
+        "message": "pay FR76 9905 3965 2635 8580 3695 442 today",
+        "nested": [{"note": "FR76-9905-3965-2635-8580-3695-442"}, 3, None],
+    }
+    redacted = redact_payload(raw)
+    assert "[IBAN redacted]" in str(redacted)
+    assert make_event(redacted)  # type: ignore[arg-type]

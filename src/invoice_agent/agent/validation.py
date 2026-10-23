@@ -18,8 +18,7 @@ from invoice_agent.db.repositories import (
     PurchaseOrderRepository,
     SupplierRepository,
 )
-from invoice_agent.domain.audit import ActorType, AuditEvent
-from invoice_agent.domain.iban import redact_ibans
+from invoice_agent.domain.audit import ActorType, AuditEvent, redact_payload
 from invoice_agent.domain.invoice import Invoice, InvoiceData
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.domain.supplier import Supplier
@@ -110,15 +109,6 @@ def _audit_payload(result: ValidationResult) -> dict[str, JsonValue]:
         "purchase_order_id": str(result.purchase_order_id) if result.purchase_order_id else None,
         "anomalies": [anomaly.model_dump(mode="json") for anomaly in result.anomalies],
     }
-    return _redact(payload)  # type: ignore[return-value]
-
-
-def _redact(value: JsonValue) -> JsonValue:
-    """Invoice text can end up in messages: never let a full IBAN reach the audit log."""
-    if isinstance(value, str):
-        return redact_ibans(value)
-    if isinstance(value, list):
-        return [_redact(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _redact(item) for key, item in value.items()}
-    return value
+    redacted = redact_payload(payload)
+    assert isinstance(redacted, dict)
+    return redacted
