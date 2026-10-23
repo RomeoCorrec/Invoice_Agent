@@ -14,9 +14,11 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     String,
@@ -242,6 +244,8 @@ class AuditEventRow(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True)
+    """Insertion order: events of one step can share a timestamp, ids are random."""
     run_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     step: Mapped[str] = mapped_column(String(64))
     actor_type: Mapped[str] = mapped_column(String(16))

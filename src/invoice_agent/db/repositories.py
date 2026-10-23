@@ -292,6 +292,6 @@ class AuditEventRepository:
         rows = self._session.scalars(
             select(AuditEventRow)
             .where(condition)
-            .order_by(AuditEventRow.occurred_at, AuditEventRow.id)
+            .order_by(AuditEventRow.occurred_at, AuditEventRow.seq)
         )
         return [mappers.audit_event_to_domain(row) for row in rows]
