@@ -3,9 +3,11 @@
 They flush but never commit (see ``session``). Rows are not exposed.
 """
 
+from collections.abc import Collection
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,6 +25,17 @@ from invoice_agent.domain.invoice_status import InvoiceStatus, check_transition
 from invoice_agent.domain.journal import JournalEntry
 from invoice_agent.domain.purchase_order import PurchaseOrder, PurchaseOrderStatus
 from invoice_agent.domain.supplier import Supplier
+
+# Invoices that count against a purchase order: extracted and beyond, minus the dead ends.
+BILLED_STATUSES = (
+    InvoiceStatus.EXTRACTED,
+    InvoiceStatus.VALIDATED,
+    InvoiceStatus.NEEDS_REVIEW,
+    InvoiceStatus.APPROVED,
+    InvoiceStatus.POSTED,
+)
+# A re-sent invoice is a duplicate even if the first copy was rejected.
+DUPLICATE_STATUSES = (*BILLED_STATUSES, InvoiceStatus.REJECTED)
 
 
 class InvoiceNotFoundError(LookupError):
@@ -63,6 +76,9 @@ class SupplierRepository:
 
     def get_by_siren(self, siren: str) -> Supplier | None:
         return self._first(SupplierRow.siren == siren)
+
+    def get_by_vat_number(self, vat_number: str) -> Supplier | None:
+        return self._first(SupplierRow.vat_number == vat_number)
 
     def _first(self, *conditions: ColumnElement[bool]) -> Supplier | None:
         row = self._session.scalars(select(SupplierRow).where(*conditions)).first()
@@ -140,6 +156,62 @@ class InvoiceRepository:
 
     def list_by_status(self, status: InvoiceStatus) -> list[Invoice]:
         return self._many(InvoiceRow.status == status.value)
+
+    def billed_ht_by_purchase_order(
+        self, order_ids: Collection[UUID], *, excluding: UUID
+    ) -> dict[UUID, Decimal]:
+        """HT already invoiced per purchase order, by invoices other than ``excluding``."""
+        if not order_ids:
+            return {}
+        rows = self._session.execute(
+            select(InvoiceRow.purchase_order_id, func.sum(InvoiceRow.total_ht))
+            .where(
+                InvoiceRow.purchase_order_id.in_(order_ids),
+                InvoiceRow.id != excluding,
+                InvoiceRow.status.in_([status.value for status in BILLED_STATUSES]),
+            )
+            .group_by(InvoiceRow.purchase_order_id)
+        )
+        return {
+            order_id: total
+            for order_id, total in rows
+            if order_id is not None and total is not None
+        }
+
+    def find_earlier_duplicates(
+        self, invoice: Invoice, *, supplier_id: UUID | None
+    ) -> list[Invoice]:
+        """Invoices received before this one that look like the same document.
+
+        Same source file, or same invoice number from the same supplier (or, while the
+        supplier is unknown, from the same seller SIREN). Ties on the reception time are
+        broken by id so that of two simultaneous copies exactly one is flagged.
+        """
+        earlier = or_(
+            InvoiceRow.received_at < invoice.received_at,
+            and_(InvoiceRow.received_at == invoice.received_at, InvoiceRow.id < invoice.id),
+        )
+        same_document: list[ColumnElement[bool]] = [
+            InvoiceRow.source_sha256 == invoice.source.sha256
+        ]
+        if invoice.data is not None:
+            number = InvoiceRow.invoice_number == invoice.data.invoice_number
+            if supplier_id is not None:
+                same_document.append(and_(InvoiceRow.supplier_id == supplier_id, number))
+            elif invoice.data.seller.siren:
+                same_document.append(
+                    and_(
+                        InvoiceRow.supplier_id.is_(None),
+                        InvoiceRow.seller_siren == invoice.data.seller.siren,
+                        number,
+                    )
+                )
+        return self._many(
+            InvoiceRow.id != invoice.id,
+            InvoiceRow.status.in_([status.value for status in DUPLICATE_STATUSES]),
+            earlier,
+            or_(*same_document),
+        )
 
     def _many(self, *conditions: ColumnElement[bool]) -> list[Invoice]:
         rows = self._session.scalars(
