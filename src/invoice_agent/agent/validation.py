@@ -97,8 +97,8 @@ def _load_context(session: Session, invoice: Invoice, data: InvoiceData) -> Vali
         referenced_order=referenced,
         open_orders=tuple(open_orders),
         billed_ht=invoices.billed_ht_by_purchase_order(order_ids, excluding=invoice.id),
-        earlier_duplicates=tuple(
-            invoices.find_earlier_duplicates(invoice, supplier_id=supplier.id if supplier else None)
+        duplicates=tuple(
+            invoices.find_duplicates(invoice, supplier_id=supplier.id if supplier else None)
         ),
     )
 

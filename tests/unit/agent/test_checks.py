@@ -47,7 +47,7 @@ def test_duplicate_is_reported_and_anomalies_are_in_stable_order() -> None:
         referenced_order=order,
         open_orders=(order,),
         billed_ht={order.id: Decimal("570.00")},
-        earlier_duplicates=(make_invoice(),),
+        duplicates=(make_invoice(),),
     )
     result = run_checks(make_data(seller=SELLER, iban=None), context)
     assert [a.code for a in result.anomalies] == [

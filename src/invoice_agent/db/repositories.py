@@ -24,6 +24,7 @@ from invoice_agent.domain.invoice import Invoice
 from invoice_agent.domain.invoice_status import InvoiceStatus, check_transition
 from invoice_agent.domain.journal import JournalEntry
 from invoice_agent.domain.purchase_order import PurchaseOrder, PurchaseOrderStatus
+from invoice_agent.domain.rules.duplicates import normalize_invoice_number
 from invoice_agent.domain.supplier import Supplier
 
 # Invoices that count against a purchase order: extracted and beyond, minus the dead ends.
@@ -34,8 +35,17 @@ BILLED_STATUSES = (
     InvoiceStatus.APPROVED,
     InvoiceStatus.POSTED,
 )
-# A re-sent invoice is a duplicate even if the first copy was rejected.
-DUPLICATE_STATUSES = (*BILLED_STATUSES, InvoiceStatus.REJECTED)
+# Copies that can make a new invoice a duplicate: every live copy (a copy still being
+# extracted already has its source file hash), but not failed ones.
+LIVE_STATUSES = (InvoiceStatus.RECEIVED, *BILLED_STATUSES, InvoiceStatus.REJECTED)
+# Copies that have already been through the checks.
+CHECKED_STATUSES = (
+    InvoiceStatus.VALIDATED,
+    InvoiceStatus.NEEDS_REVIEW,
+    InvoiceStatus.APPROVED,
+    InvoiceStatus.POSTED,
+    InvoiceStatus.REJECTED,
+)
 
 
 class InvoiceNotFoundError(LookupError):
@@ -178,40 +188,44 @@ class InvoiceRepository:
             if order_id is not None and total is not None
         }
 
-    def find_earlier_duplicates(
-        self, invoice: Invoice, *, supplier_id: UUID | None
-    ) -> list[Invoice]:
-        """Invoices received before this one that look like the same document.
+    def find_duplicates(self, invoice: Invoice, *, supplier_id: UUID | None) -> list[Invoice]:
+        """Other invoices that look like the same document, in either direction.
 
-        Same source file, or same invoice number from the same supplier (or, while the
-        supplier is unknown, from the same seller SIREN). Ties on the reception time are
-        broken by id so that of two simultaneous copies exactly one is flagged.
+        Same source file, or same invoice number (compared ignoring case and punctuation)
+        from the same seller: the resolved supplier, or the same SIREN or VAT number
+        written on the document, so a copy not yet linked to a supplier is still found.
+
+        A copy received earlier always counts. A copy received later counts only once it
+        has been through the checks: it could not have flagged this one. Together this
+        guarantees that of two copies at least one is flagged, whatever the processing
+        order. Ties on the reception time are broken by id.
         """
         earlier = or_(
             InvoiceRow.received_at < invoice.received_at,
             and_(InvoiceRow.received_at == invoice.received_at, InvoiceRow.id < invoice.id),
         )
+        counts = or_(
+            and_(earlier, InvoiceRow.status.in_([s.value for s in LIVE_STATUSES])),
+            and_(~earlier, InvoiceRow.status.in_([s.value for s in CHECKED_STATUSES])),
+        )
         same_document: list[ColumnElement[bool]] = [
             InvoiceRow.source_sha256 == invoice.source.sha256
         ]
         if invoice.data is not None:
-            number = InvoiceRow.invoice_number == invoice.data.invoice_number
+            seller = invoice.data.seller
+            same_seller: list[ColumnElement[bool]] = []
             if supplier_id is not None:
-                same_document.append(and_(InvoiceRow.supplier_id == supplier_id, number))
-            elif invoice.data.seller.siren:
-                same_document.append(
-                    and_(
-                        InvoiceRow.supplier_id.is_(None),
-                        InvoiceRow.seller_siren == invoice.data.seller.siren,
-                        number,
-                    )
-                )
-        return self._many(
-            InvoiceRow.id != invoice.id,
-            InvoiceRow.status.in_([status.value for status in DUPLICATE_STATUSES]),
-            earlier,
-            or_(*same_document),
-        )
+                same_seller.append(InvoiceRow.supplier_id == supplier_id)
+            if seller.siren:
+                same_seller.append(InvoiceRow.seller_siren == seller.siren)
+            if seller.vat_number:
+                same_seller.append(InvoiceRow.seller_vat_number == seller.vat_number)
+            if same_seller:
+                number = func.upper(
+                    func.regexp_replace(InvoiceRow.invoice_number, "[^A-Za-z0-9]", "", "g")
+                ) == normalize_invoice_number(invoice.data.invoice_number)
+                same_document.append(and_(number, or_(*same_seller)))
+        return self._many(InvoiceRow.id != invoice.id, counts, or_(*same_document))
 
     def _many(self, *conditions: ColumnElement[bool]) -> list[Invoice]:
         rows = self._session.scalars(

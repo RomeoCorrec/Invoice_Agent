@@ -1,5 +1,7 @@
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -19,6 +21,7 @@ from invoice_agent.db.repositories import (
     SupplierRepository,
 )
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
+from invoice_agent.domain.invoice import Invoice, Party, SourceDocument, SourceFormat
 from invoice_agent.domain.invoice_status import InvalidStatusTransition, InvoiceStatus
 from invoice_agent.domain.purchase_order import PurchaseOrderStatus
 from tests.factories import (
@@ -344,3 +347,120 @@ def test_invoice_notes_round_trip(session: Session) -> None:
     assert loaded is not None
     assert loaded.data is not None
     assert loaded.data.notes == ("Paiement à 30 jours", "Merci")
+
+
+# --- duplicate detection -----------------------------------------------------------------
+
+
+def extracted(
+    number: str, *, siren: str = "850223454", minutes: int = 0, **overrides: Any
+) -> Invoice:
+    when = T0 + timedelta(minutes=minutes)
+    seller = Party(name="Café des Ateliers SARL", siren=siren, vat_number=f"FR00{siren}")
+    return (
+        make_invoice(received_at=when, updated_at=when, **overrides)
+        .with_data(make_data(number, seller=seller), at=when)
+        .transition_to(InvoiceStatus.EXTRACTED, at=when)
+    )
+
+
+def test_duplicate_found_when_the_earlier_copy_has_no_supplier_link_yet(session: Session) -> None:
+    repo = InvoiceRepository(session)
+    supplier = make_supplier()
+    SupplierRepository(session).add(supplier)
+    first = extracted("F-100", minutes=0)  # supplier_id still NULL: not validated yet
+    second = extracted("F-100", minutes=5)
+    repo.add(first)
+    repo.add(second)
+    found = repo.find_duplicates(second, supplier_id=supplier.id)
+    assert [i.id for i in found] == [first.id]
+
+
+def test_invoice_numbers_are_compared_ignoring_case_and_punctuation(session: Session) -> None:
+    repo = InvoiceRepository(session)
+    first, second = extracted("F-100", minutes=0), extracted("f 100", minutes=1)
+    repo.add(first)
+    repo.add(second)
+    assert [i.id for i in repo.find_duplicates(second, supplier_id=None)] == [first.id]
+
+
+def test_same_number_from_another_seller_is_not_a_duplicate(session: Session) -> None:
+    repo = InvoiceRepository(session)
+    first = extracted("F-100", siren="151757747", minutes=0)
+    second = extracted("F-100", siren="419058185", minutes=1)
+    repo.add(first)
+    repo.add(second)
+    assert repo.find_duplicates(second, supplier_id=None) == []
+
+
+def test_same_file_is_found_even_while_the_other_copy_is_still_received(session: Session) -> None:
+    repo = InvoiceRepository(session)
+    sha = "b" * 64
+    earlier = make_invoice(
+        received_at=T0,
+        updated_at=T0,
+        source=SourceDocument(uri="s3://a", format=SourceFormat.PDF, sha256=sha),
+    )
+    later = extracted(
+        "F-100",
+        minutes=3,
+        source=SourceDocument(uri="s3://b", format=SourceFormat.PDF, sha256=sha),
+    )
+    repo.add(earlier)
+    repo.add(later)
+    assert [i.id for i in repo.find_duplicates(later, supplier_id=None)] == [earlier.id]
+
+
+def test_a_later_copy_counts_only_once_it_has_been_checked(session: Session) -> None:
+    """Whatever the processing order, at least one of two copies ends up flagged."""
+    repo = InvoiceRepository(session)
+    first, second = extracted("F-100", minutes=0), extracted("F-100", minutes=5)
+    repo.add(first)
+    repo.add(second)
+    # The later copy is only extracted: it will flag itself against `first` when checked.
+    assert repo.find_duplicates(first, supplier_id=None) == []
+    # Once the later copy was validated without seeing `first`, `first` must flag it.
+    repo.save(
+        second.transition_to(InvoiceStatus.VALIDATED, at=T0 + timedelta(minutes=6)),
+        expected_status=InvoiceStatus.EXTRACTED,
+    )
+    assert [i.id for i in repo.find_duplicates(first, supplier_id=None)] == [second.id]
+
+
+def test_failed_copies_are_ignored(session: Session) -> None:
+    repo = InvoiceRepository(session)
+    dead = make_invoice(received_at=T0, updated_at=T0).transition_to(
+        InvoiceStatus.FAILED, at=T0, failure_reason="boom"
+    )
+    live = extracted("F-100", minutes=2, source=dead.source)
+    repo.add(dead)
+    repo.add(live)
+    assert repo.find_duplicates(live, supplier_id=None) == []
+
+
+def test_billed_amounts_ignore_dead_ends_and_the_invoice_itself(session: Session) -> None:
+    supplier = make_supplier()
+    SupplierRepository(session).add(supplier)
+    order = make_purchase_order(supplier.id)
+    PurchaseOrderRepository(session).add(order)
+    repo = InvoiceRepository(session)
+
+    def linked(status: InvoiceStatus, number: str) -> Invoice:
+        invoice = extracted(number).with_links(
+            supplier_id=supplier.id, purchase_order_id=order.id, at=T0
+        )
+        if status is InvoiceStatus.EXTRACTED:
+            return invoice
+        if status is InvoiceStatus.FAILED:
+            return invoice.transition_to(status, at=T0, failure_reason="boom")
+        return invoice.transition_to(InvoiceStatus.VALIDATED, at=T0)
+
+    counted = linked(InvoiceStatus.EXTRACTED, "A")
+    validated = linked(InvoiceStatus.VALIDATED, "B")
+    failed = linked(InvoiceStatus.FAILED, "C")
+    for invoice in (counted, validated, failed):
+        repo.add(invoice)
+    billed = repo.billed_ht_by_purchase_order([order.id], excluding=counted.id)
+    assert billed == {order.id: Decimal("570.00")}  # only `validated`
+    assert repo.billed_ht_by_purchase_order([], excluding=counted.id) == {}
+    assert repo.billed_ht_by_purchase_order([uuid4()], excluding=counted.id) == {}

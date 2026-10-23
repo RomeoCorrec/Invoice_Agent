@@ -36,8 +36,8 @@ class ValidationContext:
     """Open orders of the resolved supplier (for matching without a reference)."""
     billed_ht: Mapping[UUID, Decimal] = field(default_factory=dict)
     """HT already invoiced per order by other invoices."""
-    earlier_duplicates: tuple[Invoice, ...] = ()
-    """Earlier invoices with the same supplier and number, or the same source file."""
+    duplicates: tuple[Invoice, ...] = ()
+    """Other invoices with the same seller and number, or the same source file."""
 
 
 @dataclass(frozen=True)
@@ -69,12 +69,12 @@ def run_checks(data: InvoiceData, context: ValidationContext) -> ValidationResul
     anomalies += check_totals(data)
     anomalies += check_injection(data)
 
-    if context.earlier_duplicates:
+    if context.duplicates:
         anomalies.append(
             Anomaly(
                 code=AnomalyCode.DUPLICATE_INVOICE,
                 message=f"invoice {data.invoice_number} was already received",
-                evidence={"earlier_invoice_ids": [str(i.id) for i in context.earlier_duplicates]},
+                evidence={"earlier_invoice_ids": [str(i.id) for i in context.duplicates]},
             )
         )
 
