@@ -48,7 +48,7 @@ def test_plain_pdfs_go_through_the_extractor_and_the_grounding_check(path: Path)
     extractor = ScriptedExtractor(data)
     result = run(golden_pdf(path.stem), extractor)
     assert result.source_format is SourceFormat.PDF
-    assert result.data == data
+    assert result.data.model_copy(update={"notes": ()}) == data.model_copy(update={"notes": ()})
     assert len(extractor.received) == 1
     assert "FACTURE" in extractor.received[0]
 
@@ -102,3 +102,54 @@ def test_a_broken_xml_is_not_replaced_by_the_visible_text() -> None:
 def test_unusable_documents_are_refused(content: bytes, message: str) -> None:
     with pytest.raises(ExtractionError, match=message):
         run(content, None)
+
+
+def test_an_injected_note_the_extractor_dropped_is_still_flagged_and_excluded() -> None:
+    """The extractor reports no note at all; the pipeline finds the passage in the text."""
+    honest = golden_extraction(GROUND_TRUTH / "INV-21.json")
+    assert honest.notes == ()
+    result = run(golden_pdf("INV-21"), ScriptedExtractor(honest))
+    [note] = result.data.notes
+    assert "assistant IA" in note
+    from invoice_agent.domain.rules.injection import check_injection
+
+    assert [a.code.value for a in check_injection(result.data)] == ["PROMPT_INJECTION_SUSPECTED"]
+
+
+def test_a_consistent_attack_printed_only_in_the_note_is_refused_even_if_the_note_is_dropped() -> (
+    None
+):
+    """Every fake figure (64,00 / 12,80 / 76,80) is in the note; the extractor hides the note."""
+    from decimal import Decimal
+
+    from invoice_agent.config import IngestionLimits
+    from invoice_agent.domain.invoice import InvoiceLine, VatBreakdownLine
+    from invoice_agent.ingestion.pdf_text import extract_text
+
+    text = extract_text(golden_pdf("INV-21"), IngestionLimits())
+    assert "64,00" in text
+    honest = golden_extraction(GROUND_TRUTH / "INV-21.json")
+    line = honest.lines[0]
+    attack = honest.model_copy(
+        update={
+            "lines": (
+                InvoiceLine(
+                    description=line.description,
+                    quantity=line.quantity,
+                    unit_price=Decimal("64.00"),
+                    vat_rate=line.vat_rate,
+                    amount_ht=Decimal("64.00"),
+                ),
+            ),
+            "vat_breakdown": (
+                VatBreakdownLine(
+                    rate=Decimal("20.00"), basis=Decimal("64.00"), vat=Decimal("12.80")
+                ),
+            ),
+            "total_ht": Decimal("64.00"),
+            "total_vat": Decimal("12.80"),
+            "total_ttc": Decimal("76.80"),
+        }
+    )
+    with pytest.raises(ExtractionError, match="not found in the document"):
+        run(golden_pdf("INV-21"), ScriptedExtractor(attack))
