@@ -106,3 +106,30 @@ def pdf_with_content_bomb(inflated_size: int) -> bytes:
     body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
     body += f"startxref\n{xref_at}\n%%EOF".encode()
     return body
+
+
+def pdf_with_many_content_streams(count: int) -> bytes:
+    """A one-page PDF whose /Contents is an array of ``count`` small streams."""
+    streams = [b"BT /F1 12 Tf 10 10 Td (hello) Tj ET" for _ in range(count)]
+    first_stream_object = 4
+    refs = b" ".join(f"{first_stream_object + i} 0 R".encode() for i in range(count))
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents [" + refs + b"] >>",
+    ]
+    for stream in streams:
+        objects.append(
+            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream"
+        )
+    body = b"%PDF-1.7\n"
+    offsets = []
+    for number, obj in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body += f"{number} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_at = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
+    body += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+    body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    body += f"startxref\n{xref_at}\n%%EOF".encode()
+    return body

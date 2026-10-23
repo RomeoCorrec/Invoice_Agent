@@ -60,3 +60,29 @@ def test_error_messages_never_contain_document_content() -> None:
     with pytest.raises(ExtractionError) as error:
         inspect_pdf(secret, LIMITS)
     assert "SECRET" not in str(error.value)
+
+
+def test_inflate_cap_covers_every_decoder_and_is_restored() -> None:
+    from pypdf import get_configuration
+
+    from invoice_agent.ingestion.document import inflate_cap
+
+    before = get_configuration()
+    with inflate_cap(1234):
+        inside = get_configuration()
+        assert inside.zlib_maximum_output_length == 1234
+        assert inside.lzw_maximum_output_length == 1234
+        assert inside.run_length_maximum_output_length == 1234
+        assert inside.jbig2_maximum_output_length == 1234
+        assert inside.brotli_maximum_output_length == 1234
+        assert inside.array_based_stream_maximum_output_length == 1234
+    assert get_configuration() == before
+
+
+def test_the_reader_is_built_under_the_document_cap() -> None:
+    from pypdf import get_configuration
+
+    from invoice_agent.ingestion.document import open_pdf
+
+    with open_pdf(blank_pdf(), LIMITS):
+        assert get_configuration().zlib_maximum_output_length == LIMITS.max_document_bytes

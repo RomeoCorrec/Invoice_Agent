@@ -5,14 +5,12 @@ entities, no DTD, no network) and a DOCTYPE is refused outright. Amounts are rea
 ``Decimal`` from their text, never through ``float``.
 """
 
-import io
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from lxml import etree
 from pydantic import ValidationError
-from pypdf import PdfReader, apply_configuration
 
 from invoice_agent.config import IngestionLimits
 from invoice_agent.domain.iban import IbanFingerprint
@@ -22,7 +20,7 @@ from invoice_agent.domain.invoice import (
     Party,
     VatBreakdownLine,
 )
-from invoice_agent.ingestion.document import ExtractionError
+from invoice_agent.ingestion.document import ExtractionError, inflate_cap, open_pdf
 
 NS = {
     "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
@@ -54,17 +52,19 @@ def extract_xml(content: bytes, limits: IngestionLimits) -> bytes | None:
     setting, so thread-safe) and at most MAX_ATTACHMENTS_EXAMINED names are looked at.
     """
     try:
-        reader = PdfReader(io.BytesIO(content))
-        for index, attachment in enumerate(reader.attachment_list):
-            if index >= MAX_ATTACHMENTS_EXAMINED:
-                break
-            if attachment.name.lower() not in XML_ATTACHMENT_NAMES:
-                continue
-            with apply_configuration(zlib_maximum_output_length=limits.max_xml_bytes + 1):
-                data = bytes(attachment.content)
-            if len(data) > limits.max_xml_bytes:
-                raise ExtractionError(f"embedded XML is larger than {limits.max_xml_bytes} bytes")
-            return data
+        with open_pdf(content, limits) as reader:
+            for index, attachment in enumerate(reader.attachment_list):
+                if index >= MAX_ATTACHMENTS_EXAMINED:
+                    break
+                if attachment.name.lower() not in XML_ATTACHMENT_NAMES:
+                    continue
+                with inflate_cap(limits.max_xml_bytes + 1):
+                    data = bytes(attachment.content)
+                if len(data) > limits.max_xml_bytes:
+                    raise ExtractionError(
+                        f"embedded XML is larger than {limits.max_xml_bytes} bytes"
+                    )
+                return data
     except ExtractionError:
         raise
     except Exception as exc:  # pypdf raises many types on malformed PDFs or oversized streams

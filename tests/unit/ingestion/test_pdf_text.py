@@ -3,7 +3,7 @@ import pytest
 from invoice_agent.config import IngestionLimits
 from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.ingestion.pdf_text import extract_text
-from tests.pdfs import blank_pdf, golden_pdf, pdf_with_content_bomb
+from tests.pdfs import blank_pdf, golden_pdf, pdf_with_content_bomb, pdf_with_many_content_streams
 
 TEXT_ONLY = {
     "INV-09": ["Cabinet Delorme Conseil", "SIREN 586323263", "2 640,00", "PO-2026-0109"],
@@ -38,7 +38,7 @@ def test_damaged_pdf_is_refused() -> None:
 def test_page_stream_bomb_is_stopped() -> None:
     pdf = pdf_with_content_bomb(inflated_size=5_000_000)
     with pytest.raises(ExtractionError):
-        extract_text(pdf, IngestionLimits(max_document_bytes=100_000))
+        extract_text(pdf, IngestionLimits())
 
 
 def test_page_stream_bomb_is_bounded_in_memory() -> None:
@@ -48,8 +48,18 @@ def test_page_stream_bomb_is_bounded_in_memory() -> None:
     tracemalloc.start()
     try:
         with pytest.raises(ExtractionError):
-            extract_text(pdf, IngestionLimits(max_document_bytes=100_000))
+            extract_text(pdf, IngestionLimits())
         _, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()
     assert peak < 5_000_000
+
+
+def test_too_many_pages_are_refused_before_reading_them() -> None:
+    with pytest.raises(ExtractionError, match="more than 2 pages"):
+        extract_text(blank_pdf(pages=3), IngestionLimits(max_pages=2))
+
+
+def test_pages_with_too_many_content_streams_are_refused() -> None:
+    with pytest.raises(ExtractionError, match="too many content streams"):
+        extract_text(pdf_with_many_content_streams(11), IngestionLimits())
