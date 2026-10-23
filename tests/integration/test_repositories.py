@@ -332,3 +332,15 @@ def test_engine_enforces_the_statement_timeout(postgres_url: str, engine: Engine
     with fast.connect() as connection, pytest.raises(DBAPIError, match="statement timeout"):
         connection.execute(text("SELECT pg_sleep(2)"))
     fast.dispose()
+
+
+def test_invoice_notes_round_trip(session: Session) -> None:
+    repo = InvoiceRepository(session)
+    invoice = make_invoice().with_data(make_data(notes=("Paiement à 30 jours", "Merci")), at=T0)
+    repo.add(invoice)
+    session.expunge_all()
+    loaded = repo.get(invoice.id)
+    assert loaded == invoice
+    assert loaded is not None
+    assert loaded.data is not None
+    assert loaded.data.notes == ("Paiement à 30 jours", "Merci")

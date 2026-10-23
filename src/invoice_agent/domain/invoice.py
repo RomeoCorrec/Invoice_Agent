@@ -70,6 +70,8 @@ class InvoiceData(DomainModel):
     buyer: Party | None = None
     purchase_order_ref: str | None = None
     iban: IbanFingerprint | None = None
+    notes: tuple[NonEmptyStr, ...] = ()
+    """Free text outside the lines (notes, payment terms): read by checks, never obeyed."""
     lines: tuple[InvoiceLine, ...] = Field(min_length=1)
     vat_breakdown: tuple[VatBreakdownLine, ...] = ()
     total_ht: Money
