@@ -43,7 +43,7 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
 }
 
 
-def _normalize(text: str) -> str:
+def normalize_text(text: str) -> str:
     stripped = unicodedata.normalize("NFKD", text)
     return "".join(c for c in stripped if not unicodedata.combining(c)).lower()
 
@@ -52,7 +52,7 @@ def find_injection_patterns(texts: Iterable[str]) -> list[str]:
     """Names of the patterns matched anywhere in ``texts`` (sorted, without duplicates)."""
     hits: set[str] = set()
     for text in texts:
-        normalized = _normalize(text)
+        normalized = normalize_text(text)
         hits.update(name for name, pattern in _PATTERNS.items() if pattern.search(normalized))
     return sorted(hits)
 
