@@ -69,6 +69,15 @@ def _iban_spans(folded: str) -> list[tuple[int, int]]:
     return spans
 
 
+def iter_ibans(text: str) -> list[str]:
+    """The valid IBANs written in ``text``, normalised (no separators, upper case)."""
+    folded = fold_text(text)
+    return [
+        "".join(char for char in folded[start:end] if char.isalnum()).upper()
+        for start, end in _iban_spans(folded)
+    ]
+
+
 def contains_iban(text: str) -> bool:
     """True if ``text`` holds a valid IBAN, however it is spaced out or disguised."""
     return bool(_iban_spans(fold_text(text)))
