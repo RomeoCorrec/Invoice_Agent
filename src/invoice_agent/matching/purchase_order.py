@@ -72,8 +72,12 @@ def match_purchase_order(
 def _accept_referenced(
     order: PurchaseOrder | None, supplier: Supplier | None
 ) -> PurchaseOrder | None:
-    """A quoted order of another supplier is as good as a missing one."""
-    if order is None or (supplier is not None and order.supplier_id != supplier.id):
+    """Link a quoted order only if it belongs to the recognised supplier.
+
+    Fails closed: an unknown seller cannot attach itself to a real supplier's order just
+    by quoting its number, and an order of another supplier is treated as missing.
+    """
+    if order is None or supplier is None or order.supplier_id != supplier.id:
         return None
     return order
 

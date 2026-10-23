@@ -209,3 +209,13 @@ def test_unknown_supplier_without_reference_matches_nothing() -> None:
         make_data(purchase_order_ref=None), None, referenced=None, open_orders=[], billed_ht={}
     )
     assert codes(result.anomalies) == [AnomalyCode.NO_PO_MATCH]
+
+
+def test_unknown_seller_cannot_attach_itself_to_a_real_order() -> None:
+    """Quoting a genuine order number must not link an unrecognised seller to it."""
+    real = order(make_supplier().id, "PO-1", "570.00")
+    result = match_purchase_order(
+        make_data(purchase_order_ref="PO-1"), None, referenced=real, open_orders=[], billed_ht={}
+    )
+    assert result.order is None
+    assert codes(result.anomalies) == [AnomalyCode.PO_NOT_FOUND]
