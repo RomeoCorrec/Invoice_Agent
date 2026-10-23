@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 from invoice_agent.config import IngestionLimits
 from invoice_agent.domain.invoice import InvoiceData, SourceFormat
-from invoice_agent.domain.rules.injection import squash_text, suspicious_passages
+from invoice_agent.domain.rules.injection import (
+    MAX_PASSAGES,
+    suspicious_passages,
+)
 from invoice_agent.ingestion.document import ExtractionError, inspect_pdf
 from invoice_agent.ingestion.extractor import InvoiceExtractor
 from invoice_agent.ingestion.facturx import extract_xml, parse_cii
@@ -47,24 +50,23 @@ def extract_invoice(
         raise
     except Exception as exc:  # a provider, network or parsing failure: never leak its details
         raise ExtractionError(f"the extractor failed ({type(exc).__name__})") from exc
-    data = _with_detected_injections(data, text)
-    verify_grounded(data, text, iban_key)
+    passages = suspicious_passages(text)
+    if len(passages) > MAX_PASSAGES:
+        raise ExtractionError("the document contains too many passages aimed at an AI system")
+    data = _with_notes(data, passages)
+    verify_grounded(data, text, iban_key, excluded=passages)
     return ExtractedDocument(SourceFormat.PDF, info.sha256, data)
 
 
-def _with_detected_injections(data: InvoiceData, text: str) -> InvoiceData:
-    """Add to the notes every injected passage found in the raw text.
+def _with_notes(data: InvoiceData, passages: list[str]) -> InvoiceData:
+    """Add every injected passage found in the raw text to the notes, verbatim.
 
     The extractor may have dropped, paraphrased or hidden the note that tries to steer it.
-    Declaring the passage ourselves guarantees that the injection check sees it (so the
-    invoice goes to review) and that the grounding check does not count its figures.
+    Declaring the passage ourselves guarantees that the injection rule sees it (so the
+    invoice goes to review). The same passages, found from the text and never from what the
+    extractor reports, are what the grounding check excludes.
     """
-    known = [squash_text(note) for note in data.notes]
-    added = [
-        passage
-        for passage in suspicious_passages(text)
-        if not any(squash_text(passage) in note for note in known)
-    ]
+    added = [passage for passage in passages if passage not in data.notes]
     if not added:
         return data
     return data.model_copy(update={"notes": (*data.notes, *added)})

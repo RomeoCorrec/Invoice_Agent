@@ -64,7 +64,11 @@ phrase may wrap over three lines); the pipeline adds every passage to `notes`. T
 is then flagged by the existing injection rule (so it goes to review), and the grounding
 check ignores the figures printed inside. The consistent attack (a note that prints the
 fake amount, VAT and total, with an extractor that hides the note) is accepted by grounding
-alone and refused with the scan, which is covered by two tests and a mutation check.
+alone and refused with the scan, which is covered by tests and mutation checks. The excluded
+passages are passed to the grounding check as a separate argument: the notes an extractor
+reports are only verified to exist in the text and never decide what is excluded. A document
+with more than 10 such passages is refused (fail closed), and a passage that wraps over several
+lines is followed to the end of its sentence (at most 5 extra lines).
 
 ### Bank details
 `IBAN_MISMATCH` also covers a note announcing new bank details or containing an IBAN

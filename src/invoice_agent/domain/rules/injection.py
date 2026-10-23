@@ -75,6 +75,7 @@ def find_injection_patterns(texts: Iterable[str]) -> list[str]:
 
 MAX_PASSAGE_LINES = 3
 MAX_PASSAGES = 10
+MAX_CONTINUATION_LINES = 5
 _SENTENCE_END = (".", "!", "?")
 
 
@@ -83,8 +84,9 @@ def suspicious_passages(text: str) -> list[str]:
 
     Found from the text alone, so they do not depend on what an extractor reports. A
     phrase can be wrapped over up to MAX_PASSAGE_LINES lines, and a hit line that does not
-    end a sentence is extended to the next line. Overlapping hits are merged; at most
-    MAX_PASSAGES are returned.
+    end a sentence is followed to the line that ends it (at most MAX_CONTINUATION_LINES).
+    Overlapping hits are merged. All passages are returned: callers decide what too many
+    means (the pipeline refuses beyond MAX_PASSAGES instead of silently ignoring the rest).
     """
     lines = [line.strip() for line in fold_text(text).splitlines() if line.strip()]
     marked = [False] * len(lines)
@@ -98,10 +100,15 @@ def suspicious_passages(text: str) -> list[str]:
                 for index in range(start, start + len(window)):
                     marked[index] = True
                 break
-    extended = list(marked)  # one extra line per unfinished sentence, not a chain
-    for index in range(len(lines) - 1):
-        if marked[index] and not lines[index].endswith(_SENTENCE_END):
-            extended[index + 1] = True
+    extended = list(marked)
+    for index, line in enumerate(lines):
+        if not marked[index] or line.endswith(_SENTENCE_END):
+            continue
+        # The sentence goes on: follow it up to the line that ends it (bounded).
+        for follower in range(index + 1, min(index + 1 + MAX_CONTINUATION_LINES, len(lines))):
+            extended[follower] = True
+            if lines[follower].endswith(_SENTENCE_END):
+                break
     passages: list[str] = []
     current: list[str] = []
     for line, is_marked in zip(lines, extended, strict=True):
@@ -112,7 +119,7 @@ def suspicious_passages(text: str) -> list[str]:
             current = []
     if current:
         passages.append(" ".join(current))
-    return passages[:MAX_PASSAGES]
+    return passages
 
 
 def document_texts(data: InvoiceData) -> list[str]:

@@ -17,7 +17,7 @@ text it was extracted from; otherwise the extraction is rejected (fail closed).
 """
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -37,6 +37,7 @@ MAX_INTEGER_DIGITS = 8
 """Longer digit runs are identifiers (a SIREN has 9 digits), not amounts: this caps a
 single figure at 99,999,999 euros, far above any invoice this system handles."""
 
+_REMOVED = "\n|\n"
 _SPACE = " \u00a0\u202f"
 # French grouping ("1 250,00"), otherwise a plain number with optional separators.
 _NUMBER_TOKEN = re.compile(
@@ -100,8 +101,9 @@ def _remove_passages(text: str, passages: Iterable[str]) -> str:
     for passage in passages:
         words = fold_text(passage).split()
         if words:
-            pattern = r"\s+".join(re.escape(word) for word in words)
-            text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+            body = r"\s+".join(re.escape(word) for word in words)
+            # Whole words only, and a separator that cannot glue two digit runs together.
+            text = re.sub(rf"(?<!\w){body}(?!\w)", _REMOVED, text, flags=re.IGNORECASE)
     return text
 
 
@@ -119,7 +121,7 @@ def _in_order(value: str, words: list[str]) -> bool:
     """
     needle = squash_text(value).split()
     if not needle:
-        return True
+        return False  # nothing but punctuation: there is nothing to verify
     for start, word in enumerate(words):
         if word != needle[0]:
             continue
@@ -136,17 +138,21 @@ def _in_order(value: str, words: list[str]) -> bool:
     return False
 
 
-def verify_grounded(data: InvoiceData, text: str, iban_key: bytes) -> None:
+def verify_grounded(
+    data: InvoiceData, text: str, iban_key: bytes, *, excluded: Sequence[str] = ()
+) -> None:
     """Raise ExtractionError, naming the offending fields, if ``data`` is not in ``text``.
 
-    ``data.notes`` must already include the injected passages detected in ``text`` (see
-    the pipeline); they are excluded from what counts as printed.
+    ``excluded`` are the passages that *our own scan* found to hold injection phrasing
+    (``suspicious_passages``): they do not count as printed. The notes the extractor
+    reports play no part in that decision; they are only checked to exist in the text.
     """
     folded = fold_text(text)
-    printed = _remove_passages(folded, data.notes)
+    printed = _remove_passages(folded, excluded)
     squashed = squash_text(printed)
     words = squashed.split()
-    numbers = _numbers_in(redact_ibans(printed))
+    # IBANs are masked on the original text, before anything is cut out of it.
+    numbers = _numbers_in(_remove_passages(redact_ibans(folded), excluded))
     missing: list[str] = []
 
     def has_id(field: str, value: str | None) -> None:
