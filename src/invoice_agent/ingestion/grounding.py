@@ -151,8 +151,9 @@ def verify_grounded(
     printed = _remove_passages(folded, excluded)
     squashed = squash_text(printed)
     words = squashed.split()
-    # IBANs are masked on the original text, before anything is cut out of it.
-    numbers = _numbers_in(_remove_passages(redact_ibans(folded), excluded))
+    # Passages are cut out first, then IBANs are masked in what remains: the other way round,
+    # an IBAN inside an injected passage would stop the passage from being found.
+    numbers = _numbers_in(redact_ibans(printed))
     missing: list[str] = []
 
     def has_id(field: str, value: str | None) -> None:
