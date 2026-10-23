@@ -10,7 +10,13 @@ from invoice_agent.domain.iban import IbanFingerprint
 from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.ingestion.facturx import extract_xml, parse_cii
 from tests.factories import GROUND_TRUTH, IBAN_KEY
-from tests.pdfs import blank_pdf, golden_pdf, pdf_with_attachment
+from tests.pdfs import (
+    blank_pdf,
+    golden_pdf,
+    pdf_with_attachment,
+    pdf_with_flate_bomb,
+    pdf_with_many_attachments,
+)
 
 LIMITS = IngestionLimits()
 FACTURX_CASES = [
@@ -106,8 +112,39 @@ def test_blank_pdf_has_no_embedded_xml() -> None:
 
 def test_oversized_embedded_xml_is_refused() -> None:
     pdf = pdf_with_attachment("factur-x.xml", b"<a>" + b"x" * 5000 + b"</a>")
-    with pytest.raises(ExtractionError, match="larger than"):
+    with pytest.raises(ExtractionError):
         extract_xml(pdf, IngestionLimits(max_xml_bytes=1000))
+
+
+def test_decompression_bomb_is_stopped_while_inflating() -> None:
+    """A few KB in the file, 5 MB once inflated: refused against a 1 KB limit."""
+    pdf = pdf_with_flate_bomb("factur-x.xml", inflated_size=5_000_000)
+    assert len(pdf) < 20_000
+    with pytest.raises(ExtractionError):
+        extract_xml(pdf, IngestionLimits(max_xml_bytes=1000))
+
+
+def test_only_the_expected_attachment_is_decoded() -> None:
+    """A bomb under another name is never inflated."""
+    pdf = pdf_with_flate_bomb("notes.bin", inflated_size=5_000_000)
+    assert extract_xml(pdf, IngestionLimits(max_xml_bytes=1000)) is None
+
+
+def test_the_inflate_limit_does_not_leak_outside_the_call() -> None:
+    from pypdf import get_configuration
+
+    before = get_configuration().zlib_maximum_output_length
+    with pytest.raises(ExtractionError):
+        extract_xml(
+            pdf_with_flate_bomb("factur-x.xml", 5_000_000), IngestionLimits(max_xml_bytes=1000)
+        )
+    assert get_configuration().zlib_maximum_output_length == before
+
+
+def test_the_number_of_attachments_examined_is_capped() -> None:
+    pdf = pdf_with_many_attachments(25, b"<a/>")
+    assert extract_xml(pdf, IngestionLimits()) is None  # the real one is past the cap
+    assert extract_xml(pdf_with_many_attachments(3, b"<a/>"), IngestionLimits()) == b"<a/>"
 
 
 # --- hostile XML -----------------------------------------------------------------------------
@@ -193,3 +230,18 @@ def test_amounts_with_too_many_decimals_are_refused_not_rounded() -> None:
     broken = xml.replace(b"<ram:GrandTotalAmount>360.00<", b"<ram:GrandTotalAmount>360.005<", 1)
     with pytest.raises(ExtractionError, match="invalid value"):
         parse_cii(broken, IBAN_KEY)
+
+
+def test_inflation_is_bounded_while_decoding_not_only_checked_afterwards() -> None:
+    """Peak memory stays tiny for a 30 MB bomb: the limit applies during decompression."""
+    import tracemalloc
+
+    pdf = pdf_with_flate_bomb("factur-x.xml", inflated_size=30_000_000)
+    tracemalloc.start()
+    try:
+        with pytest.raises(ExtractionError):
+            extract_xml(pdf, IngestionLimits(max_xml_bytes=1000))
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 5_000_000

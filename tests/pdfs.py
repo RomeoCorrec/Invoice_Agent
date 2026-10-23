@@ -1,6 +1,7 @@
 """Tiny PDFs built on the fly for ingestion tests."""
 
 import io
+import zlib
 from pathlib import Path
 
 from pypdf import PdfWriter
@@ -38,3 +39,70 @@ def encrypted_pdf() -> bytes:
 def golden_pdf(case_id: str) -> bytes:
     [path] = INVOICES.glob(f"{case_id}_*.pdf")
     return path.read_bytes()
+
+
+def pdf_with_many_attachments(count: int, wanted: bytes) -> bytes:
+    """`count` junk attachments, all sorted before the real invoice XML (names are sorted)."""
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    for index in range(count):
+        writer.add_attachment(f"a-{index:03d}.txt", b"x" * 10)
+    writer.add_attachment("factur-x.xml", wanted)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def pdf_with_flate_bomb(filename: str, inflated_size: int) -> bytes:
+    """A hand-written PDF whose attachment is tiny in the file and ``inflated_size`` inflated."""
+    name = filename.encode()
+    compressed = zlib.compress(b"0" * inflated_size, 9)
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names ["
+        b"(" + name + b") 4 0 R] >> >> >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>",
+        b"<< /Type /Filespec /F (" + name + b") /EF << /F 5 0 R >> >>",
+        b"<< /Type /EmbeddedFile /Filter /FlateDecode /Length "
+        + str(len(compressed)).encode()
+        + b" >>\nstream\n"
+        + compressed
+        + b"\nendstream",
+    ]
+    body = b"%PDF-1.7\n"
+    offsets = []
+    for number, obj in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body += f"{number} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_at = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
+    body += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+    body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    body += f"startxref\n{xref_at}\n%%EOF".encode()
+    return body
+
+
+def pdf_with_content_bomb(inflated_size: int) -> bytes:
+    """A one-page PDF whose content stream is tiny in the file and huge once inflated."""
+    compressed = zlib.compress(b"0 " * (inflated_size // 2), 9)
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>",
+        b"<< /Filter /FlateDecode /Length "
+        + str(len(compressed)).encode()
+        + b" >>\nstream\n"
+        + compressed
+        + b"\nendstream",
+    ]
+    body = b"%PDF-1.7\n"
+    offsets = []
+    for number, obj in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body += f"{number} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_at = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
+    body += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+    body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    body += f"startxref\n{xref_at}\n%%EOF".encode()
+    return body

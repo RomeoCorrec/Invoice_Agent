@@ -12,7 +12,7 @@ from typing import Any
 
 from lxml import etree
 from pydantic import ValidationError
-from pypdf import PdfReader
+from pypdf import PdfReader, apply_configuration
 
 from invoice_agent.config import IngestionLimits
 from invoice_agent.domain.iban import IbanFingerprint
@@ -32,6 +32,7 @@ NS = {
 COMMERCIAL_INVOICE = "380"
 # Names under which a CII invoice is embedded (Factur-X, ZUGFeRD 2, XRechnung CII).
 XML_ATTACHMENT_NAMES = frozenset({"factur-x.xml", "zugferd-invoice.xml", "xrechnung.xml"})
+MAX_ATTACHMENTS_EXAMINED = 20
 
 _PARSER = etree.XMLParser(
     resolve_entities=False,
@@ -48,18 +49,26 @@ def extract_xml(content: bytes, limits: IngestionLimits) -> bytes | None:
     """The embedded Factur-X XML, or None for a plain PDF.
 
     The attachment is read with pypdf and handed straight to our hardened parser: no other
-    library parses this untrusted XML first.
+    library parses this untrusted XML first. Attachments are listed lazily and only the
+    expected one is decoded; its inflated size is capped by pypdf itself (a context-local
+    setting, so thread-safe) and at most MAX_ATTACHMENTS_EXAMINED names are looked at.
     """
     try:
-        attachments = PdfReader(io.BytesIO(content)).attachments
-    except Exception as exc:  # pypdf raises many types on malformed PDFs
-        raise ExtractionError("could not read the PDF attachments") from exc
-    for name, payloads in attachments.items():
-        if name.lower() in XML_ATTACHMENT_NAMES and payloads:
-            data = bytes(payloads[0])
+        reader = PdfReader(io.BytesIO(content))
+        for index, attachment in enumerate(reader.attachment_list):
+            if index >= MAX_ATTACHMENTS_EXAMINED:
+                break
+            if attachment.name.lower() not in XML_ATTACHMENT_NAMES:
+                continue
+            with apply_configuration(zlib_maximum_output_length=limits.max_xml_bytes + 1):
+                data = bytes(attachment.content)
             if len(data) > limits.max_xml_bytes:
                 raise ExtractionError(f"embedded XML is larger than {limits.max_xml_bytes} bytes")
             return data
+    except ExtractionError:
+        raise
+    except Exception as exc:  # pypdf raises many types on malformed PDFs or oversized streams
+        raise ExtractionError("could not read the embedded invoice XML") from exc
     return None
 
 
