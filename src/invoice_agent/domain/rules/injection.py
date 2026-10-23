@@ -9,6 +9,7 @@ import re
 import unicodedata
 from collections.abc import Iterable
 
+from invoice_agent.domain.iban import fold_text
 from invoice_agent.domain.invoice import InvoiceData
 from invoice_agent.domain.rules.anomaly import Anomaly, AnomalyCode
 
@@ -44,16 +45,26 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
 
 
 def normalize_text(text: str) -> str:
-    stripped = unicodedata.normalize("NFKD", text)
+    """Lower-case, accent-free, with invisible characters removed (NFKC first)."""
+    stripped = unicodedata.normalize("NFKD", fold_text(text))
     return "".join(c for c in stripped if not unicodedata.combining(c)).lower()
+
+
+def squash_text(text: str) -> str:
+    """``normalize_text`` with every run of punctuation or spaces reduced to one space."""
+    return re.sub(r"[^a-z0-9]+", " ", normalize_text(text)).strip()
 
 
 def find_injection_patterns(texts: Iterable[str]) -> list[str]:
     """Names of the patterns matched anywhere in ``texts`` (sorted, without duplicates)."""
     hits: set[str] = set()
     for text in texts:
-        normalized = normalize_text(text)
-        hits.update(name for name, pattern in _PATTERNS.items() if pattern.search(normalized))
+        variants = (normalize_text(text), squash_text(text))
+        hits.update(
+            name
+            for name, pattern in _PATTERNS.items()
+            if any(pattern.search(variant) for variant in variants)
+        )
     return sorted(hits)
 
 
@@ -75,7 +86,8 @@ def document_texts(data: InvoiceData) -> list[str]:
             for item in value:
                 collect(item)
 
-    collect(data.model_dump(mode="json"))
+    # The IBAN fingerprint is excluded: its hex digest is not text a model would obey.
+    collect(data.model_dump(mode="json", exclude={"iban"}))
     return texts
 
 

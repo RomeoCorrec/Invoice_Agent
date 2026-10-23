@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import JsonValue, model_validator
 
 from invoice_agent.domain.base import DomainModel
-from invoice_agent.domain.iban import IBAN_IN_TEXT
+from invoice_agent.domain.iban import contains_iban
 from invoice_agent.domain.types import NonEmptyStr, UtcDatetime
 
 
@@ -39,7 +39,7 @@ class AuditEvent(DomainModel):
 def _contains_iban(value: JsonValue) -> bool:
     match value:
         case str():
-            return IBAN_IN_TEXT.search(value) is not None
+            return contains_iban(value)
         case list():
             return any(_contains_iban(item) for item in value)
         case dict():

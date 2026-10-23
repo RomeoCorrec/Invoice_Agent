@@ -28,7 +28,7 @@ from invoice_agent.db.repositories import (
     SupplierRepository,
 )
 from invoice_agent.db.session import make_session_factory, session_scope
-from invoice_agent.domain.iban import IBAN_IN_TEXT, IbanFingerprint
+from invoice_agent.domain.iban import IbanFingerprint, contains_iban
 from invoice_agent.domain.invoice import Invoice, SourceDocument, SourceFormat
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.domain.purchase_order import PurchaseOrder, PurchaseOrderLine
@@ -163,7 +163,7 @@ def test_every_invoice_has_an_audit_event_without_a_full_iban(
         event = case["event"]
         assert event.step == "validate"
         assert event.payload["status"] == case["status"]
-        assert not IBAN_IN_TEXT.search(json.dumps(event.payload))
+        assert not contains_iban(json.dumps(event.payload))
 
 
 def test_validating_twice_is_refused(session: Session) -> None:

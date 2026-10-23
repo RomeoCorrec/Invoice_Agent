@@ -8,19 +8,85 @@ environment and is passed in: this module does no I/O.
 import hashlib
 import hmac
 import re
+import unicodedata
 
 from pydantic import Field
 
 from invoice_agent.domain.base import DomainModel
 
 _IBAN_SHAPE = re.compile(r"^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$")
-IBAN_IN_TEXT = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b")
-"""Matches something that looks like an IBAN inside free text (used to keep them out of logs)."""
+# Total length of an IBAN by country; other countries are tried from 15 to 34 characters.
+_COUNTRY_LENGTHS = {
+    "FR": 27, "MC": 27, "DE": 22, "BE": 16, "ES": 24, "IT": 27, "NL": 18, "GB": 22,
+    "CH": 21, "LU": 20, "PT": 25, "IE": 22, "AT": 20,
+}  # fmt: skip
+_MIN_LENGTH, _MAX_LENGTH = 15, 34
+_START = re.compile(r"(?<![A-Z0-9])[A-Z]{2}\d{2}", re.IGNORECASE)
+_SEPARATORS = "-._"
+
+
+def fold_text(text: str) -> str:
+    """Compatibility-normalise and drop invisible format characters (zero-width, soft hyphen).
+
+    Closes the easy bypasses of text matching: full-width digits, zero-width spaces.
+    """
+    normalized = unicodedata.normalize("NFKC", text)
+    return "".join(char for char in normalized if unicodedata.category(char) != "Cf")
+
+
+def _mod97_ok(iban: str) -> bool:
+    """ISO 13616 check: move the first four characters to the end, letters become 10..35."""
+    rearranged = iban[4:] + iban[:4]
+    digits = "".join(str(int(char, 36)) for char in rearranged)
+    return int(digits) % 97 == 1
+
+
+def _iban_spans(folded: str) -> list[tuple[int, int]]:
+    """Spans of valid IBANs in ``folded`` text, whatever separates their characters."""
+    spans: list[tuple[int, int]] = []
+    resume = 0
+    for start in _START.finditer(folded):
+        if start.start() < resume:
+            continue
+        chars: list[str] = []
+        ends: list[int] = []
+        for index in range(start.start(), len(folded)):
+            char = folded[index]
+            if char.isascii() and char.isalnum():
+                chars.append(char.upper())
+                ends.append(index + 1)
+                if len(chars) == _MAX_LENGTH:
+                    break
+            elif not (char.isspace() or char in _SEPARATORS):
+                break
+        known = _COUNTRY_LENGTHS.get("".join(chars[:2]))
+        lengths = [known] if known else range(_MAX_LENGTH, _MIN_LENGTH - 1, -1)
+        for length in lengths:
+            if length <= len(chars) and _mod97_ok("".join(chars[:length])):
+                spans.append((start.start(), ends[length - 1]))
+                resume = ends[length - 1]
+                break
+    return spans
+
+
+def contains_iban(text: str) -> bool:
+    """True if ``text`` holds a valid IBAN, however it is spaced out or disguised."""
+    return bool(_iban_spans(fold_text(text)))
 
 
 def redact_ibans(text: str) -> str:
-    """Replace anything that looks like an IBAN, so free text can be logged safely."""
-    return IBAN_IN_TEXT.sub("[IBAN redacted]", text)
+    """Replace every IBAN found in ``text``, so free text can be logged safely.
+
+    The text is returned in its folded form (see ``fold_text``).
+    """
+    folded = fold_text(text)
+    pieces: list[str] = []
+    cursor = 0
+    for start, end in _iban_spans(folded):
+        pieces += [folded[cursor:start], "[IBAN redacted]"]
+        cursor = end
+    pieces.append(folded[cursor:])
+    return "".join(pieces)
 
 
 def normalize_iban(raw: str) -> str:
