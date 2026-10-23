@@ -133,3 +133,36 @@ def pdf_with_many_content_streams(count: int) -> bytes:
     body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
     body += f"startxref\n{xref_at}\n%%EOF".encode()
     return body
+
+
+def pdf_with_form_invocations(count: int) -> bytes:
+    """A page that draws the same form XObject ``count`` times."""
+    page_content = b"/Fm0 Do\n" * count
+    form_content = b"BT (x) Tj ET"
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R"
+        b" /Resources << /XObject << /Fm0 5 0 R >> >> >>",
+        b"<< /Length "
+        + str(len(page_content)).encode()
+        + b" >>\nstream\n"
+        + page_content
+        + b"endstream",
+        b"<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Length "
+        + str(len(form_content)).encode()
+        + b" >>\nstream\n"
+        + form_content
+        + b"\nendstream",
+    ]
+    body = b"%PDF-1.7\n"
+    offsets = []
+    for number, obj in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body += f"{number} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_at = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
+    body += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+    body += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    body += f"startxref\n{xref_at}\n%%EOF".encode()
+    return body

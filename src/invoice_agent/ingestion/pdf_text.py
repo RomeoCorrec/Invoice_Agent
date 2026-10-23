@@ -1,5 +1,6 @@
 """Text of a PDF without embedded XML, bounded so it can be handed to an extractor."""
 
+from pypdf import apply_configuration
 from pypdf.generic import ArrayObject
 
 from invoice_agent.config import IngestionLimits
@@ -8,6 +9,12 @@ from invoice_agent.ingestion.document import ExtractionError, inflate_cap, open_
 MAX_CONTENT_STREAMS_PER_PAGE = 10
 INFLATE_FACTOR = 8
 MIN_INFLATE_CAP = 1024 * 1024
+MAX_FORM_INVOCATIONS_PER_PAGE = 50
+MAX_FILTERS_PER_STREAM = 4
+MAX_PARSING_WORK = 500_000
+"""Work caps for text extraction (pypdf defaults are 5000 forms, 16 filters, 2M operators:
+far beyond an invoice). A form that invokes itself or is invoked thousands of times,
+or a stream built to keep the parser busy, stops with an error."""
 """A page's content stream (text operators) may inflate to INFLATE_FACTOR times the text
 budget, at least MIN_INFLATE_CAP: generous for real invoices, far below a decompression bomb."""
 
@@ -27,7 +34,15 @@ def extract_text(content: bytes, limits: IngestionLimits) -> str:
             if len(reader.pages) > limits.max_pages:
                 raise ExtractionError(f"PDF has more than {limits.max_pages} pages")
             cap = max(limits.max_text_chars * INFLATE_FACTOR, MIN_INFLATE_CAP)
-            with inflate_cap(cap):
+            with (
+                inflate_cap(cap),
+                apply_configuration(
+                    xform_maximum_invocations_per_extraction=MAX_FORM_INVOCATIONS_PER_PAGE,
+                    stream_filters_maximum_length=MAX_FILTERS_PER_STREAM,
+                    stream_decoding_work_maximum_length=cap,
+                    stream_parsing_work_maximum_count=MAX_PARSING_WORK,
+                ),
+            ):
                 for page in reader.pages:
                     streams = page.get("/Contents")
                     streams = streams.get_object() if streams is not None else None

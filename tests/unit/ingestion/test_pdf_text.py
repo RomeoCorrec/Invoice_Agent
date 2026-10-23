@@ -3,7 +3,13 @@ import pytest
 from invoice_agent.config import IngestionLimits
 from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.ingestion.pdf_text import extract_text
-from tests.pdfs import blank_pdf, golden_pdf, pdf_with_content_bomb, pdf_with_many_content_streams
+from tests.pdfs import (
+    blank_pdf,
+    golden_pdf,
+    pdf_with_content_bomb,
+    pdf_with_form_invocations,
+    pdf_with_many_content_streams,
+)
 
 TEXT_ONLY = {
     "INV-09": ["Cabinet Delorme Conseil", "SIREN 586323263", "2 640,00", "PO-2026-0109"],
@@ -63,3 +69,14 @@ def test_too_many_pages_are_refused_before_reading_them() -> None:
 def test_pages_with_too_many_content_streams_are_refused() -> None:
     with pytest.raises(ExtractionError, match="too many content streams"):
         extract_text(pdf_with_many_content_streams(11), IngestionLimits())
+
+
+def test_a_page_that_draws_a_form_thousands_of_times_is_refused() -> None:
+    with pytest.raises(ExtractionError):
+        extract_text(pdf_with_form_invocations(200), IngestionLimits())
+
+
+def test_a_few_form_invocations_do_not_hit_the_limit() -> None:
+    """The hand-made form has no font, so there is no text: that error shows no cap was hit."""
+    with pytest.raises(ExtractionError, match="no text"):
+        extract_text(pdf_with_form_invocations(5), IngestionLimits())
