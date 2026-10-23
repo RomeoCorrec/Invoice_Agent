@@ -21,7 +21,7 @@ from invoice_agent.db.repositories import (
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
 from invoice_agent.domain.invoice_status import InvalidStatusTransition, InvoiceStatus
 from invoice_agent.domain.purchase_order import PurchaseOrderStatus
-from tests.integration.factories import (
+from tests.factories import (
     GROUND_TRUTH,
     T0,
     golden_extraction,
