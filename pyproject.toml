@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.20.0",
+    "factur-x>=7.7",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.1",
+    "pypdf>=6.21.2",
     "sqlalchemy>=2.1.6",
 ]
 
@@ -48,3 +50,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
 addopts = "-ra --strict-markers"
+
+[[tool.mypy.overrides]]
+module = ["facturx.*", "lxml.*"]
+ignore_missing_imports = true
