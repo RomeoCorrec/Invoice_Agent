@@ -63,7 +63,7 @@ def run_checks(data: InvoiceData, context: ValidationContext) -> ValidationResul
                 evidence={"seller_siren": data.seller.siren, "seller_vat": data.seller.vat_number},
             )
         )
-    anomalies += check_siren(data)
+    anomalies += check_siren(data, supplier)
     anomalies += check_iban(data, supplier)
     anomalies += check_vat(data)
     anomalies += check_totals(data)

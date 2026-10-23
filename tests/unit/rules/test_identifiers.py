@@ -31,15 +31,15 @@ def test_every_digit_change_breaks_the_checksum() -> None:
 
 
 def test_valid_siren_is_not_flagged() -> None:
-    assert check_siren(make_data(seller=Party(name="X", siren="151757747"))) == []
+    assert check_siren(make_data(seller=Party(name="X", siren="151757747")), None) == []
 
 
 def test_missing_siren_is_not_flagged() -> None:
-    assert check_siren(make_data(seller=Party(name="X"))) == []
+    assert check_siren(make_data(seller=Party(name="X")), None) == []
 
 
 def test_invalid_siren_is_flagged_like_inv_19() -> None:
-    [anomaly] = check_siren(make_data(seller=Party(name="X", siren="151757748")))
+    [anomaly] = check_siren(make_data(seller=Party(name="X", siren="151757748")), None)
     assert anomaly.code is AnomalyCode.INVALID_SIREN
     assert anomaly.evidence == {"siren": "151757748"}
 
@@ -67,3 +67,24 @@ def test_iban_is_not_checked_when_either_side_is_unknown() -> None:
     assert check_iban(make_data(iban=iban), None) == []
     assert check_iban(make_data(iban=iban), make_supplier(iban=None)) == []
     assert check_iban(make_data(iban=None), make_supplier(iban=iban)) == []
+
+
+def test_well_formed_but_foreign_siren_on_a_known_supplier_is_flagged() -> None:
+    """Identified by VAT number, but the SIREN is another (valid) company's."""
+    supplier = make_supplier(siren="151757747")
+    seller = Party(name="Papeterie Mercier SARL", siren="419058185", vat_number=supplier.vat_number)
+    [anomaly] = check_siren(make_data(seller=seller), supplier)
+    assert anomaly.code is AnomalyCode.INVALID_SIREN
+    assert "differs" in anomaly.message
+
+
+def test_matching_siren_on_a_known_supplier_is_fine() -> None:
+    supplier = make_supplier(siren="151757747")
+    assert check_siren(make_data(seller=Party(name="X", siren="151757747")), supplier) == []
+
+
+def test_invalid_siren_on_a_known_supplier_yields_a_single_anomaly_like_inv_19() -> None:
+    supplier = make_supplier(siren="151757747")
+    anomalies = check_siren(make_data(seller=Party(name="X", siren="151757748")), supplier)
+    assert [a.code for a in anomalies] == [AnomalyCode.INVALID_SIREN]
+    assert "Luhn" in anomalies[0].message

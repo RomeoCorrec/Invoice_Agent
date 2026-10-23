@@ -20,17 +20,23 @@ def luhn_valid(number: str) -> bool:
     return total % 10 == 0
 
 
-def check_siren(data: InvoiceData) -> list[Anomaly]:
+def check_siren(data: InvoiceData, supplier: Supplier | None) -> list[Anomaly]:
+    """The seller SIREN must be well formed and, if a supplier was identified, be theirs.
+
+    The second part matters because a supplier can be recognised through its VAT number
+    even when the SIREN is wrong: a different but well-formed SIREN must not pass silently.
+    One anomaly at most, whatever the reason.
+    """
     siren = data.seller.siren
-    if siren is None or luhn_valid(siren):
+    if siren is None:
         return []
-    return [
-        Anomaly(
-            code=AnomalyCode.INVALID_SIREN,
-            message=f"seller SIREN {siren} fails the Luhn check",
-            evidence={"siren": siren},
-        )
-    ]
+    if not luhn_valid(siren):
+        reason = f"seller SIREN {siren} fails the Luhn check"
+    elif supplier is not None and siren != supplier.siren:
+        reason = f"seller SIREN {siren} differs from the one on file for {supplier.code}"
+    else:
+        return []
+    return [Anomaly(code=AnomalyCode.INVALID_SIREN, message=reason, evidence={"siren": siren})]
 
 
 def check_iban(data: InvoiceData, supplier: Supplier | None) -> list[Anomaly]:
