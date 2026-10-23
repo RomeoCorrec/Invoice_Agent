@@ -51,7 +51,6 @@ _BANK_CHANGE = re.compile(
     r"|\bcoordonnees\s+bancaires\s+(ont\s+)?(change|modifie)"
     r"|\b(utiliser|regler|virer|verser|payer)\b.{0,30}\b(nouveau|nouvelle|nouveaux|nouvelles)\b"
     r".{0,20}\b(compte|rib|iban|coordonnees)\b"
-    r"|\biban\s+a\s+utiliser\b"
     r"|\bnew\s+bank\s+(details|account)\b"
     r"|\b(bank|banking)\s+details\s+(have\s+)?changed\b"
     r"|\b(change|update)\s+(of\s+)?(your\s+)?(bank|payment)\s+(details|account|instructions)\b"
