@@ -39,9 +39,6 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
         "amount_override": (
             r"\b(doit|doivent)\s+etre\s+lus?\b|\bau\s+lieu\s+de\b.{0,20}\d|\bread\s+(it\s+)?as\b|\binstead\s+of\b.{0,20}\d"
         ),
-        "payment_redirect": (
-            r"\biban\s+a\s+utiliser\b|\bnouvel(le)?s?\s+coordonnees\s+bancaires\b|\bnew\s+bank\s+details\b"
-        ),
     }.items()
 }
 
