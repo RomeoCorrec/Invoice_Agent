@@ -1,0 +1,69 @@
+import pytest
+
+from invoice_agent.domain.iban import IbanFingerprint
+from invoice_agent.domain.invoice import Party
+from invoice_agent.domain.rules.anomaly import AnomalyCode
+from invoice_agent.domain.rules.identifiers import check_iban, check_siren, luhn_valid
+from tests.factories import IBAN_KEY, make_data, make_supplier
+
+
+@pytest.mark.parametrize(
+    "number",
+    ["151757747", "419058185", "586323263", "73282932000074", "356000000"],
+)
+def test_valid_luhn_numbers(number: str) -> None:
+    assert luhn_valid(number)
+
+
+@pytest.mark.parametrize("number", ["151757748", "123456789", "", "12a456789", "000000001"])
+def test_invalid_luhn_numbers(number: str) -> None:
+    assert not luhn_valid(number)
+
+
+def test_every_digit_change_breaks_the_checksum() -> None:
+    """Luhn detects any single-digit error, which is what INV-19 relies on."""
+    base = "151757747"
+    for index in range(len(base)):
+        for digit in "0123456789":
+            if digit != base[index]:
+                altered = base[:index] + digit + base[index + 1 :]
+                assert not luhn_valid(altered)
+
+
+def test_valid_siren_is_not_flagged() -> None:
+    assert check_siren(make_data(seller=Party(name="X", siren="151757747"))) == []
+
+
+def test_missing_siren_is_not_flagged() -> None:
+    assert check_siren(make_data(seller=Party(name="X"))) == []
+
+
+def test_invalid_siren_is_flagged_like_inv_19() -> None:
+    [anomaly] = check_siren(make_data(seller=Party(name="X", siren="151757748")))
+    assert anomaly.code is AnomalyCode.INVALID_SIREN
+    assert anomaly.evidence == {"siren": "151757748"}
+
+
+def test_same_iban_is_accepted() -> None:
+    iban = IbanFingerprint.from_iban("FR7699053965263585803695442", IBAN_KEY)
+    assert check_iban(make_data(iban=iban), make_supplier(iban=iban)) == []
+
+
+def test_different_iban_is_flagged_like_inv_18() -> None:
+    supplier = make_supplier(
+        iban=IbanFingerprint.from_iban("FR7699470095021252774786577", IBAN_KEY)
+    )
+    data = make_data(iban=IbanFingerprint.from_iban("FR7699546325778456691797437", IBAN_KEY))
+    [anomaly] = check_iban(data, supplier)
+    assert anomaly.code is AnomalyCode.IBAN_MISMATCH
+    assert anomaly.evidence == {
+        "invoice_iban": "FR76 **** 7437",
+        "reference_iban": "FR76 **** 6577",
+    }
+
+
+def test_iban_is_not_checked_when_either_side_is_unknown() -> None:
+    iban = IbanFingerprint.from_iban("FR7699053965263585803695442", IBAN_KEY)
+    assert check_iban(make_data(iban=iban), None) == []
+    assert check_iban(make_data(iban=iban), make_supplier(iban=None)) == []
+    assert check_iban(make_data(iban=None), make_supplier(iban=iban)) == []
