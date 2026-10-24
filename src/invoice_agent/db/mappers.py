@@ -9,6 +9,7 @@ from invoice_agent.db.models import (
     InvoiceLineRow,
     InvoiceRow,
     InvoiceVatLineRow,
+    JobRow,
     JournalEntryRow,
     JournalLineRow,
     PurchaseOrderLineRow,
@@ -27,6 +28,7 @@ from invoice_agent.domain.invoice import (
     VatBreakdownLine,
 )
 from invoice_agent.domain.invoice_status import InvoiceStatus
+from invoice_agent.domain.job import Job, JobStatus
 from invoice_agent.domain.journal import JournalEntry, JournalLine, Side
 from invoice_agent.domain.purchase_order import (
     PurchaseOrder,
@@ -311,4 +313,46 @@ def audit_event_to_domain(row: AuditEventRow) -> AuditEvent:
         invoice_id=row.invoice_id,
         payload=row.payload,
         occurred_at=row.occurred_at,
+    )
+
+
+# --- job ---------------------------------------------------------------------------------
+
+
+def job_to_row(job: Job) -> JobRow:
+    row = JobRow(id=job.id)
+    apply_job(row, job)
+    return row
+
+
+def apply_job(row: JobRow, job: Job) -> None:
+    row.kind = job.kind
+    row.payload = dict(job.payload)
+    row.status = job.status.value
+    row.attempts = job.attempts
+    row.max_attempts = job.max_attempts
+    row.run_after = job.run_after
+    row.locked_by = job.locked_by
+    row.locked_until = job.locked_until
+    row.last_error = job.last_error
+    row.idempotency_key = job.idempotency_key
+    row.created_at = job.created_at
+    row.updated_at = job.updated_at
+
+
+def job_to_domain(row: JobRow) -> Job:
+    return Job(
+        id=row.id,
+        kind=row.kind,
+        payload=row.payload,
+        status=JobStatus(row.status),
+        attempts=row.attempts,
+        max_attempts=row.max_attempts,
+        run_after=row.run_after,
+        locked_by=row.locked_by,
+        locked_until=row.locked_until,
+        last_error=row.last_error,
+        idempotency_key=row.idempotency_key,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
