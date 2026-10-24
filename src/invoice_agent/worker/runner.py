@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from types import FrameType
 from typing import Any
 
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, StatementError
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.config import WorkerSettings
@@ -43,15 +43,30 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _causes(exc: BaseException) -> list[BaseException]:
+    """``exc`` and the exceptions it was raised from or while handling (bounded, no cycles)."""
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain and len(chain) < 10:
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+    return chain
+
+
 def describe_error(exc: BaseException) -> str:
     """A short, IBAN-free description that is safe to store and log.
 
     Redaction comes before truncation, otherwise an IBAN cut at the limit would survive in
-    part. Database errors are reduced to their types: their message carries the SQL statement
-    and its parameters, which can hold invoice data.
+    part. If the error is, or was raised from, a SQLAlchemy statement error, only the types
+    are kept: such messages carry the SQL statement and its parameters, which can hold
+    invoice text.
     """
-    if isinstance(exc, DBAPIError):
-        text = f"{type(exc).__name__}: {type(exc.orig).__name__}"
+    chain = _causes(exc)
+    if any(isinstance(link, StatementError) for link in chain):
+        types = [type(link).__name__ for link in chain]
+        if isinstance(chain[0], DBAPIError):
+            types.append(type(chain[0].orig).__name__)
+        text = " <- ".join(dict.fromkeys(types))
     else:
         text = f"{type(exc).__name__}: {exc}"
     redacted = redact_payload(text)
