@@ -34,6 +34,7 @@ from invoice_agent.db.base import MONEY, QUANTITY, RATE, Base, in_values
 from invoice_agent.domain.audit import ActorType
 from invoice_agent.domain.invoice import SourceFormat
 from invoice_agent.domain.invoice_status import InvoiceStatus
+from invoice_agent.domain.job import JobStatus
 from invoice_agent.domain.purchase_order import PurchaseOrderStatus
 
 TIMESTAMP = DateTime(timezone=True)
@@ -253,3 +254,32 @@ class AuditEventRow(Base):
     invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     occurred_at: Mapped[datetime] = mapped_column(TIMESTAMP)
+
+
+class JobRow(Base):
+    """Queue of background work, polled by workers (see ``JobRepository.claim``)."""
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(in_values("status", JobStatus), name="status_valid"),
+        # A lease exists exactly while the job runs.
+        CheckConstraint("(status = 'running') = (locked_by IS NOT NULL)", name="lease_worker"),
+        CheckConstraint("(status = 'running') = (locked_until IS NOT NULL)", name="lease_expiry"),
+        CheckConstraint("attempts >= 0 AND attempts <= max_attempts", name="attempts_bounded"),
+        CheckConstraint("max_attempts >= 1", name="max_attempts_positive"),
+        Index("ix_jobs_status_run_after", "status", "run_after"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    max_attempts: Mapped[int] = mapped_column(Integer)
+    run_after: Mapped[datetime] = mapped_column(TIMESTAMP)
+    locked_by: Mapped[str | None] = mapped_column(String(128))
+    locked_until: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200), unique=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP)
