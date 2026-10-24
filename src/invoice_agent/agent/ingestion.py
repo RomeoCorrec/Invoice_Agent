@@ -5,6 +5,7 @@ so no transaction is held open while it runs. Then, in the caller's transaction,
 is stored as received, moved to extracted (or failed, with the reason) and audited.
 """
 
+from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -19,6 +20,7 @@ from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.ingestion.document import ExtractionError, sha256_hex
 from invoice_agent.ingestion.extractor import InvoiceExtractor
 from invoice_agent.ingestion.pipeline import ExtractedDocument, extract_invoice
+from invoice_agent.ingestion.reading import RawDocument, read_document
 
 ACTOR_ID = "ingestion"
 
@@ -33,6 +35,7 @@ def ingest_document(
     limits: IngestionLimits,
     run_id: UUID,
     now: datetime,
+    reader: Callable[..., RawDocument] = read_document,
 ) -> Invoice:
     """Store the document as an invoice: ``extracted`` on success, ``failed`` otherwise.
 
@@ -44,7 +47,9 @@ def ingest_document(
     extracted: ExtractedDocument | None = None
     failure: str | None = None
     try:
-        extracted = extract_invoice(content, extractor=extractor, iban_key=iban_key, limits=limits)
+        extracted = extract_invoice(
+            content, extractor=extractor, iban_key=iban_key, limits=limits, reader=reader
+        )
     except ExtractionError as exc:
         failure = str(exc)
 
