@@ -23,6 +23,7 @@ from datetime import UTC, datetime, timedelta
 from types import FrameType
 from typing import Any
 
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.config import WorkerSettings
@@ -43,11 +44,19 @@ def utc_now() -> datetime:
 
 
 def describe_error(exc: BaseException) -> str:
-    """A short, IBAN-free description that is safe to store and log."""
-    text = f"{type(exc).__name__}: {exc}"[:MAX_ERROR_LENGTH]
+    """A short, IBAN-free description that is safe to store and log.
+
+    Redaction comes before truncation, otherwise an IBAN cut at the limit would survive in
+    part. Database errors are reduced to their types: their message carries the SQL statement
+    and its parameters, which can hold invoice data.
+    """
+    if isinstance(exc, DBAPIError):
+        text = f"{type(exc).__name__}: {type(exc.orig).__name__}"
+    else:
+        text = f"{type(exc).__name__}: {exc}"
     redacted = redact_payload(text)
     assert isinstance(redacted, str)
-    return redacted
+    return redacted[:MAX_ERROR_LENGTH]
 
 
 class Worker:
