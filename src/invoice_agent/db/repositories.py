@@ -4,6 +4,7 @@ They flush but never commit (see ``session``). Rows are not exposed.
 """
 
 from collections.abc import Collection
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from invoice_agent.db import mappers
 from invoice_agent.db.models import (
     AuditEventRow,
     InvoiceRow,
+    JobRow,
     JournalEntryRow,
     PurchaseOrderRow,
     SupplierRow,
@@ -22,6 +24,7 @@ from invoice_agent.db.models import (
 from invoice_agent.domain.audit import AuditEvent
 from invoice_agent.domain.invoice import Invoice
 from invoice_agent.domain.invoice_status import InvoiceStatus, check_transition
+from invoice_agent.domain.job import Job, JobStatus, check_job_transition
 from invoice_agent.domain.journal import JournalEntry
 from invoice_agent.domain.purchase_order import PurchaseOrder, PurchaseOrderStatus
 from invoice_agent.domain.rules.duplicates import normalize_invoice_number
@@ -295,3 +298,114 @@ class AuditEventRepository:
             .order_by(AuditEventRow.occurred_at, AuditEventRow.seq)
         )
         return [mappers.audit_event_to_domain(row) for row in rows]
+
+
+class LeaseLostError(RuntimeError):
+    """The job is no longer running under this worker (its lease expired and it was taken over)."""
+
+
+class JobRepository:
+    """The job queue. Workers claim with ``FOR UPDATE SKIP LOCKED`` so none takes the same job."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def enqueue(self, job: Job) -> Job:
+        """Insert the job, or return the existing one if its idempotency key was already used."""
+        key = job.idempotency_key
+        if key is not None and (existing := self._by_key(key)) is not None:
+            return existing
+        try:
+            # Savepoint: losing a race must not poison the surrounding transaction.
+            with self._session.begin_nested():
+                self._session.add(mappers.job_to_row(job))
+                self._session.flush()
+            return job
+        except IntegrityError:
+            existing = self._by_key(key) if key is not None else None
+            if existing is None:
+                raise
+            return existing
+
+    def claim(self, worker_id: str, *, now: datetime, lease: timedelta) -> Job | None:
+        """Take the next due job, or one whose worker's lease expired. None if nothing is due.
+
+        A job taken over from a dead worker with no attempt left is moved to ``dead`` instead
+        of running again.
+        """
+        while True:
+            row = self._session.scalars(
+                select(JobRow)
+                .where(
+                    or_(
+                        and_(JobRow.status == JobStatus.QUEUED.value, JobRow.run_after <= now),
+                        and_(JobRow.status == JobStatus.RUNNING.value, JobRow.locked_until < now),
+                    )
+                )
+                .order_by(JobRow.run_after, JobRow.created_at)
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            ).first()
+            if row is None:
+                return None
+            if row.attempts >= row.max_attempts:
+                row.status = JobStatus.DEAD.value
+                row.locked_by = None
+                row.locked_until = None
+                row.last_error = "the worker died during the last attempt"
+                row.updated_at = now
+                self._session.flush()
+                continue
+            row.status = JobStatus.RUNNING.value
+            row.attempts += 1
+            row.locked_by = worker_id
+            row.locked_until = now + lease
+            row.updated_at = now
+            self._session.flush()
+            return mappers.job_to_domain(row)
+
+    def succeed(self, job_id: UUID, worker_id: str, *, now: datetime) -> None:
+        row = self._owned(job_id, worker_id)
+        self._finish(row, JobStatus.SUCCEEDED, now, error=None)
+
+    def retry(
+        self, job_id: UUID, worker_id: str, *, now: datetime, run_after: datetime, error: str
+    ) -> None:
+        """Back to ``queued`` for a later attempt."""
+        row = self._owned(job_id, worker_id)
+        self._finish(row, JobStatus.QUEUED, now, error=error)
+        row.run_after = run_after
+        self._session.flush()
+
+    def die(self, job_id: UUID, worker_id: str, *, now: datetime, error: str) -> None:
+        """No more attempts: the job stays for inspection and is never claimed again."""
+        row = self._owned(job_id, worker_id)
+        self._finish(row, JobStatus.DEAD, now, error=error)
+
+    def get(self, job_id: UUID) -> Job | None:
+        row = self._session.get(JobRow, job_id)
+        return mappers.job_to_domain(row) if row else None
+
+    def count_by_status(self) -> dict[JobStatus, int]:
+        rows = self._session.execute(select(JobRow.status, func.count()).group_by(JobRow.status))
+        return {JobStatus(status): count for status, count in rows}
+
+    def _by_key(self, key: str) -> Job | None:
+        row = self._session.scalars(select(JobRow).where(JobRow.idempotency_key == key)).first()
+        return mappers.job_to_domain(row) if row else None
+
+    def _owned(self, job_id: UUID, worker_id: str) -> JobRow:
+        row = self._session.get(JobRow, job_id, with_for_update=True)
+        if row is None or row.status != JobStatus.RUNNING.value or row.locked_by != worker_id:
+            raise LeaseLostError(f"job {job_id} is not running under worker {worker_id!r}")
+        return row
+
+    def _finish(self, row: JobRow, target: JobStatus, now: datetime, *, error: str | None) -> None:
+        check_job_transition(JobStatus(row.status), target)
+        row.status = target.value
+        row.locked_by = None
+        row.locked_until = None
+        row.updated_at = now
+        if error is not None:
+            row.last_error = error
+        self._session.flush()

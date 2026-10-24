@@ -33,3 +33,17 @@ PDF bytes -> ingest_document  (Factur-X XML parsed, or text -> extractor -> grou
 The extractor for PDFs without an embedded XML is an interface (`InvoiceExtractor`); the LLM
 implementation, its prompt and the evaluation come with step 04. See `docs/adr/0003` and
 `docs/adr/0004` for the rules and the ingestion hardening.
+
+## Running the worker
+
+```bash
+docker compose up -d db
+uv run alembic upgrade head
+cp .env.example .env                              # set DOCUMENT_ROOT and IBAN_HASH_KEY
+uv run python -m invoice_agent.worker enqueue     # queue every PDF under DOCUMENT_ROOT
+uv run python -m invoice_agent.worker             # process jobs until SIGINT / SIGTERM
+```
+
+Jobs live in the `jobs` table: claimed with `FOR UPDATE SKIP LOCKED`, leased, retried with
+exponential backoff, and marked `dead` after the last attempt. The PDF parser runs in a child
+process with a deadline. See `docs/adr/0005-worker.md`.
