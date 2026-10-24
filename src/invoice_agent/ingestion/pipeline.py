@@ -1,5 +1,6 @@
 """From the bytes of a PDF to ``InvoiceData``: Factur-X first, extractor as fallback."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from invoice_agent.config import IngestionLimits
@@ -8,11 +9,11 @@ from invoice_agent.domain.rules.injection import (
     MAX_PASSAGES,
     suspicious_passages,
 )
-from invoice_agent.ingestion.document import ExtractionError, inspect_pdf
+from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.ingestion.extractor import InvoiceExtractor
-from invoice_agent.ingestion.facturx import extract_xml, parse_cii
+from invoice_agent.ingestion.facturx import parse_cii
 from invoice_agent.ingestion.grounding import verify_grounded
-from invoice_agent.ingestion.pdf_text import extract_text
+from invoice_agent.ingestion.reading import RawDocument, read_document
 
 
 @dataclass(frozen=True)
@@ -28,22 +29,27 @@ def extract_invoice(
     extractor: InvoiceExtractor | None,
     iban_key: bytes,
     limits: IngestionLimits,
+    reader: Callable[..., RawDocument] = read_document,
 ) -> ExtractedDocument:
     """Extract the invoice data, or raise ExtractionError (never a half-filled result).
+
+    ``reader`` is phase 1 (see ``reading``): in process by default, or run in a child
+    process with a deadline by the worker. Phase 2, below, never touches the PDF again.
 
     A PDF with an embedded Factur-X XML is parsed deterministically. If that XML is broken
     the document is refused: falling back to the visible text would let a tampered XML hide
     behind a readable page. Only a PDF *without* XML goes to the extractor, whose output is
     then checked against the text it came from.
     """
-    info = inspect_pdf(content, limits)
-    xml = extract_xml(content, limits)
-    if xml is not None:
-        return ExtractedDocument(SourceFormat.FACTURX, info.sha256, parse_cii(xml, iban_key))
+    raw = reader(content, limits, want_text=extractor is not None)
+    if raw.xml is not None:
+        return ExtractedDocument(SourceFormat.FACTURX, raw.sha256, parse_cii(raw.xml, iban_key))
 
     if extractor is None:
         raise ExtractionError("no extractor is configured for PDFs without an embedded XML")
-    text = extract_text(content, limits)
+    text = raw.text
+    if text is None:
+        raise ExtractionError("the document reader returned no text")
     try:
         data = extractor.extract(text)
     except ExtractionError:
@@ -55,7 +61,7 @@ def extract_invoice(
         raise ExtractionError("the document contains too many passages aimed at an AI system")
     data = _with_notes(data, passages)
     verify_grounded(data, text, iban_key, excluded=passages)
-    return ExtractedDocument(SourceFormat.PDF, info.sha256, data)
+    return ExtractedDocument(SourceFormat.PDF, raw.sha256, data)
 
 
 def _with_notes(data: InvoiceData, passages: list[str]) -> InvoiceData:
