@@ -1,6 +1,6 @@
 # ADR-0007: Agent graph and tools
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-25
 
 ## Context
@@ -44,7 +44,7 @@ START -> ingest -> validate -> match_po -+- anomalies or doubt -> explain -+
 | `ingest` | deterministic, one LLM call for plain PDFs | Factur-X or text extraction (existing pipeline) |
 | `validate` | deterministic | the eleven rules of ADR-0003 |
 | `match_po` | deterministic | purchase-order matching |
-| `explain` | LLM, read-only tools | plain-language explanation of each anomaly, only when there is one |
+| `explain` | LLM, read-only tool loop | plain-language explanation of each anomaly, only when there is one |
 | `propose_entry` | deterministic first | balanced PCG entry (expense 6xx, input VAT 44566, supplier 401) from the supplier's default accounts; the model is consulted only when the account is ambiguous |
 | `human_approval` | `interrupt` | the run stops, its state is checkpointed, the API resumes it with the decision |
 | `post_entry` | MCP write tool | posts the entry with an idempotency key |
@@ -116,5 +116,8 @@ agreed with the owner, per "no prompt change without an eval run".
   status are authoritative, and a mismatch must fail closed.
 - New dependencies, to be approved before the implementation step: `langgraph`,
   `langgraph-checkpoint-postgres`, `mcp`.
-- Open points for the owner: whether `explain` gets a read-only tool loop or receives the
-  data pre-fetched, and the eval thresholds for the new metrics.
+- Decided with the owner: `explain` runs a bounded, read-only tool loop (a maximum number of
+  calls, read tools only) rather than receiving pre-fetched data. It is built last, once the
+  rest of the graph works with pre-fetched data, so the loop can be compared with that
+  baseline by the evaluation.
+- Still open: the eval thresholds for the new metrics, agreed after a first measurement.
