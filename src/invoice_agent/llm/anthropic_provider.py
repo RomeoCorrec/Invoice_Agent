@@ -13,6 +13,7 @@ exception: the document being processed must not leak into logs or the job table
 import time
 
 import anthropic
+from opentelemetry.sdk.trace import TracerProvider
 from pydantic import BaseModel, ValidationError
 
 from invoice_agent.config import Effort
@@ -42,7 +43,14 @@ class AnthropicProvider:
         self._model = model
         self._effort = effort
         self._client = client or anthropic.Anthropic(
-            api_key=api_key, timeout=timeout_s, max_retries=max_retries
+            api_key=api_key,
+            timeout=timeout_s,
+            max_retries=max_retries,
+            # The SDK traces its own calls through the global OpenTelemetry provider, which
+            # Langfuse registers: each call would show up twice, with its cost counted twice.
+            # TracedProvider records the call once; this provider's spans go nowhere, and no
+            # trace context is sent to the API.
+            open_telemetry={"tracer_provider": TracerProvider(), "propagation": False},
         )
 
     @property

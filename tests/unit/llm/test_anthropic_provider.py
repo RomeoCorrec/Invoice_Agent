@@ -173,3 +173,30 @@ def test_errors_never_echo_what_the_api_said_or_the_document() -> None:
 def test_an_unpriced_model_fails_at_start_up() -> None:
     with pytest.raises(UnknownModelError):
         AnthropicProvider(api_key="k", model="claude-unknown-1")
+
+
+def test_the_sdk_does_not_trace_its_own_calls_or_send_a_trace_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Langfuse registers the global OpenTelemetry provider. If the SDK used it, every call
+    would appear twice in a trace, with its cost counted twice."""
+    from opentelemetry import trace
+
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return ok(request)
+
+    real = anthropic.Anthropic
+
+    def with_mock_transport(**kwargs: Any) -> anthropic.Anthropic:
+        return real(http_client=httpx2.Client(transport=httpx2.MockTransport(handler)), **kwargs)
+
+    monkeypatch.setattr(anthropic, "Anthropic", with_mock_transport)
+    llm = AnthropicProvider(api_key="sk-ant-test-key", model=MODEL)
+    assert call(llm).total == "12.50"
+    options = llm._client.open_telemetry
+    assert options["tracer_provider"] is not trace.get_tracer_provider()
+    assert options["propagation"] is False
+    assert "traceparent" not in seen[0].headers
