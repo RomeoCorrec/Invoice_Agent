@@ -4,8 +4,10 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal, get_args
 
 MIN_IBAN_KEY_LENGTH = 16
+Effort = Literal["low", "medium", "high"]
 
 
 class ConfigError(RuntimeError):
@@ -43,7 +45,7 @@ class LlmSettings:
     model: str = "claude-haiku-5-5"
     timeout_s: float = 60.0
     max_retries: int = 2
-    effort: str = "low"
+    effort: Effort = "low"
 
 
 @dataclass(frozen=True)
@@ -97,9 +99,10 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     worker_defaults = WorkerSettings()
     llm_defaults = LlmSettings()
     root = env.get("DOCUMENT_ROOT")
-    effort = env.get("LLM_EFFORT", llm_defaults.effort)
-    if effort not in ("low", "medium", "high"):
+    raw_effort = env.get("LLM_EFFORT", llm_defaults.effort)
+    if raw_effort not in get_args(Effort):
         raise ConfigError("LLM_EFFORT must be low, medium or high")
+    effort: Effort = raw_effort  # type: ignore[assignment]
     return Settings(
         database_url=database_url,
         iban_hash_key=key.encode(),

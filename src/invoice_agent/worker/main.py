@@ -17,8 +17,11 @@ from sqlalchemy.orm import Session
 from invoice_agent.config import ConfigError, Settings, load_settings
 from invoice_agent.db.repositories import JobRepository
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
+from invoice_agent.ingestion.extractor import InvoiceExtractor
 from invoice_agent.ingestion.isolated import read_document_isolated
+from invoice_agent.llm.factory import build_extractor
 from invoice_agent.observability.logging import configure_logging, log_event
+from invoice_agent.observability.tracing import Tracing
 from invoice_agent.worker.handlers import HANDLERS, JobContext, ingest_job
 from invoice_agent.worker.runner import Worker
 from invoice_agent.worker.store import LocalDocumentStore
@@ -33,7 +36,9 @@ def document_names(root: Path) -> list[str]:
     )
 
 
-def build_worker(settings: Settings) -> Worker:
+def build_worker(
+    settings: Settings, tracing: Tracing, extractor: InvoiceExtractor | None
+) -> Worker:
     root = settings.worker.document_root
     if root is None:
         raise ConfigError("DOCUMENT_ROOT is not set")
@@ -47,11 +52,12 @@ def build_worker(settings: Settings) -> Worker:
             session=session,
             now=now,
             store=store,
-            extractor=None,  # the LLM extractor arrives with step 04
+            extractor=extractor,
             iban_key=settings.iban_hash_key,
             limits=settings.limits,
             max_attempts=settings.worker.max_attempts,
             reader=reader,
+            tracing=tracing,
         )
 
     return Worker(
@@ -60,6 +66,7 @@ def build_worker(settings: Settings) -> Worker:
         handlers=HANDLERS,
         context_for=context_for,
         settings=settings.worker,
+        tracing=tracing,
     )
 
 
@@ -90,11 +97,23 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "enqueue":
             enqueue_documents(settings)
             return 0
-        worker = build_worker(settings)
+        tracing = Tracing.from_env(os.environ)
+        extractor = build_extractor(settings, tracing)
+        worker = build_worker(settings, tracing, extractor)
     except ConfigError as exc:
         log_event(logger, "configuration_error", level=logging.ERROR, error=str(exc))
         return 2
-    log_event(logger, "no_extractor_configured", level=logging.WARNING)
+    log_event(
+        logger,
+        "worker_configured",
+        llm_model=settings.llm.model if extractor else None,
+        tracing=tracing.enabled,
+    )
+    if extractor is None:
+        log_event(logger, "no_extractor_configured", level=logging.WARNING)
     worker.install_signal_handlers()
-    worker.run_forever()
+    try:
+        worker.run_forever()
+    finally:
+        tracing.shutdown()  # sends what is still buffered to Langfuse
     return 0

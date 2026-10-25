@@ -32,7 +32,12 @@ class NotReadyForValidationError(ValueError):
 
 
 def validate_invoice(
-    session: Session, invoice_id: UUID, *, run_id: UUID, now: datetime
+    session: Session,
+    invoice_id: UUID,
+    *,
+    run_id: UUID,
+    now: datetime,
+    trace_id: str | None = None,
 ) -> ValidationResult:
     """Check an extracted invoice and move it to validated or needs_review.
 
@@ -64,7 +69,7 @@ def validate_invoice(
             actor_type=ActorType.SYSTEM,
             actor_id=ACTOR_ID,
             invoice_id=invoice_id,
-            payload=_audit_payload(result),
+            payload=_audit_payload(result, trace_id),
             occurred_at=now,
         )
     )
@@ -102,13 +107,15 @@ def _load_context(session: Session, invoice: Invoice, data: InvoiceData) -> Vali
     )
 
 
-def _audit_payload(result: ValidationResult) -> dict[str, JsonValue]:
+def _audit_payload(result: ValidationResult, trace_id: str | None) -> dict[str, JsonValue]:
     payload: dict[str, JsonValue] = {
         "status": result.status.value,
         "supplier_id": str(result.supplier_id) if result.supplier_id else None,
         "purchase_order_id": str(result.purchase_order_id) if result.purchase_order_id else None,
         "anomalies": [anomaly.model_dump(mode="json") for anomaly in result.anomalies],
     }
+    if trace_id:
+        payload["trace_id"] = trace_id
     redacted = redact_payload(payload)
     assert isinstance(redacted, dict)
     return redacted

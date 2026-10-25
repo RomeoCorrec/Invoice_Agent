@@ -11,11 +11,11 @@ exception: the document being processed must not leak into logs or the job table
 """
 
 import time
-from typing import Literal
 
 import anthropic
 from pydantic import BaseModel, ValidationError
 
+from invoice_agent.config import Effort
 from invoice_agent.llm.pricing import cost_usd, price_for
 from invoice_agent.llm.provider import (
     LlmPermanentError,
@@ -24,7 +24,6 @@ from invoice_agent.llm.provider import (
     LlmUsage,
 )
 
-Effort = Literal["low", "medium", "high"]
 TRANSIENT_STATUS = frozenset({408, 409, 429, 529})
 
 
