@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from invoice_agent.config import IngestionLimits
 from invoice_agent.domain.invoice import InvoiceData, SourceFormat
+from invoice_agent.domain.job import TransientJobError
 from invoice_agent.domain.rules.injection import (
     MAX_PASSAGES,
     suspicious_passages,
@@ -52,9 +53,9 @@ def extract_invoice(
         raise ExtractionError("the document reader returned no text")
     try:
         data = extractor.extract(text)
-    except ExtractionError:
-        raise
-    except Exception as exc:  # a provider, network or parsing failure: never leak its details
+    except (ExtractionError, TransientJobError):
+        raise  # a transient failure must reach the worker, which retries; not a failed invoice
+    except Exception as exc:  # an unexpected failure: never leak its details
         raise ExtractionError(f"the extractor failed ({type(exc).__name__})") from exc
     passages = suspicious_passages(text)
     if len(passages) > MAX_PASSAGES:
