@@ -37,11 +37,23 @@ class WorkerSettings:
 
 
 @dataclass(frozen=True)
+class LlmSettings:
+    api_key: str | None = field(default=None, repr=False)
+    """None disables the language model: PDFs without an embedded XML then fail cleanly."""
+    model: str = "claude-haiku-5-5"
+    timeout_s: float = 60.0
+    max_retries: int = 2
+    effort: str = "low"
+
+
+@dataclass(frozen=True)
 class Settings:
-    database_url: str
-    iban_hash_key: bytes
+    # Secrets are kept out of repr(), so that logging a Settings object leaks nothing.
+    database_url: str = field(repr=False)
+    iban_hash_key: bytes = field(repr=False)
     limits: IngestionLimits
     worker: WorkerSettings = field(default_factory=WorkerSettings)
+    llm: LlmSettings = field(default_factory=LlmSettings)
 
 
 def _positive_int(environ: Mapping[str, str], name: str, default: int) -> int:
@@ -83,7 +95,11 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         )
     defaults = IngestionLimits()
     worker_defaults = WorkerSettings()
+    llm_defaults = LlmSettings()
     root = env.get("DOCUMENT_ROOT")
+    effort = env.get("LLM_EFFORT", llm_defaults.effort)
+    if effort not in ("low", "medium", "high"):
+        raise ConfigError("LLM_EFFORT must be low, medium or high")
     return Settings(
         database_url=database_url,
         iban_hash_key=key.encode(),
@@ -108,5 +124,12 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
                 env, "JOB_BACKOFF_CAP_SECONDS", worker_defaults.backoff_cap_s
             ),
             document_root=Path(root) if root else None,
+        ),
+        llm=LlmSettings(
+            api_key=env.get("ANTHROPIC_API_KEY") or None,
+            model=env.get("LLM_MODEL", llm_defaults.model),
+            timeout_s=_positive_float(env, "LLM_TIMEOUT_SECONDS", llm_defaults.timeout_s),
+            max_retries=_positive_int(env, "LLM_MAX_RETRIES", llm_defaults.max_retries),
+            effort=effort,
         ),
     )

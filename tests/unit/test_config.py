@@ -68,3 +68,41 @@ def test_worker_settings_can_be_overridden() -> None:
 def test_invalid_worker_settings_are_refused(name: str, bad: str) -> None:
     with pytest.raises(ConfigError, match=name):
         load_settings({**VALID, name: bad})
+
+
+def test_llm_defaults_and_overrides() -> None:
+    assert load_settings(VALID).llm.api_key is None
+    assert load_settings(VALID).llm.model == "claude-haiku-5-5"
+    env = {
+        **VALID,
+        "ANTHROPIC_API_KEY": "sk-ant-test",
+        "LLM_MODEL": "claude-sonnet-5-5",
+        "LLM_TIMEOUT_SECONDS": "30",
+        "LLM_MAX_RETRIES": "1",
+        "LLM_EFFORT": "medium",
+    }
+    llm = load_settings(env).llm
+    assert (llm.api_key, llm.model, llm.timeout_s, llm.max_retries, llm.effort) == (
+        "sk-ant-test",
+        "claude-sonnet-5-5",
+        30.0,
+        1,
+        "medium",
+    )
+
+
+def test_an_empty_api_key_means_no_language_model() -> None:
+    assert load_settings({**VALID, "ANTHROPIC_API_KEY": ""}).llm.api_key is None
+
+
+def test_invalid_effort_is_refused() -> None:
+    with pytest.raises(ConfigError, match="LLM_EFFORT"):
+        load_settings({**VALID, "LLM_EFFORT": "extreme"})
+
+
+def test_secrets_never_appear_in_the_repr_of_the_settings() -> None:
+    env = {**VALID, "ANTHROPIC_API_KEY": "sk-ant-very-secret", "IBAN_HASH_KEY": "h" * 40}
+    shown = repr(load_settings(env))
+    assert "sk-ant-very-secret" not in shown
+    assert "hhhh" not in shown
+    assert "postgresql" not in shown
