@@ -74,7 +74,7 @@ class CaseResult:
         return self.status == "ok"
 
 
-def _skipped(case: EvalCase) -> CaseResult:
+def skipped(case: EvalCase) -> CaseResult:
     return _failed(case, "skipped", "cost cap reached", None)
 
 
@@ -255,7 +255,7 @@ def run_suite(
     results: list[CaseResult] = []
     for case in cases:
         if budget.exhausted:
-            results.append(_skipped(case))
+            results.append(skipped(case))
             continue
         result = run_case(case, extractor, recorder, reference, iban_key)
         budget.charge(result.cost_usd)

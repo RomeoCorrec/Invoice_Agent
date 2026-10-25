@@ -64,6 +64,11 @@ class Tracing:
     def enabled(self) -> bool:
         return self._client is not None
 
+    @property
+    def client(self) -> Langfuse | None:
+        """The Langfuse client, for features beyond tracing (datasets, experiments)."""
+        return self._client
+
     def trace_id_for(self, seed: str) -> str | None:
         """A stable trace id derived from ``seed`` (None when disabled)."""
         return self._client.create_trace_id(seed=seed) if self._client else None
