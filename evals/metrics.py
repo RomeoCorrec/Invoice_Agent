@@ -12,13 +12,21 @@ def _text(value: str | None) -> str | None:
 
 
 def _party_fields(prefix: str, expected: Party | None, actual: Party | None) -> dict[str, bool]:
+    """The name is always compared; an identifier only if the ground truth defines it.
+
+    The ground truth leaves the buyer's VAT number out although the invoices print it, so a
+    model that extracts it must not be marked wrong for being more complete.
+    """
     if expected is None:
         return {}
-    return {
-        f"{prefix}.name": actual is not None and _text(actual.name) == _text(expected.name),
-        f"{prefix}.siren": actual is not None and actual.siren == expected.siren,
-        f"{prefix}.vat_number": actual is not None and actual.vat_number == expected.vat_number,
-    }
+    fields = {f"{prefix}.name": actual is not None and _text(actual.name) == _text(expected.name)}
+    if expected.siren is not None:
+        fields[f"{prefix}.siren"] = actual is not None and actual.siren == expected.siren
+    if expected.vat_number is not None:
+        fields[f"{prefix}.vat_number"] = (
+            actual is not None and actual.vat_number == expected.vat_number
+        )
+    return fields
 
 
 def compare_extraction(expected: InvoiceData, actual: InvoiceData | None) -> dict[str, bool]:

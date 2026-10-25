@@ -103,3 +103,20 @@ def test_nearest_rank_percentiles() -> None:
 
 def test_percentile_of_nothing_is_zero() -> None:
     assert percentile([], 95) == 0.0
+
+
+def test_an_identifier_the_ground_truth_does_not_define_is_not_compared() -> None:
+    """The buyer's VAT number is printed on the invoices but absent from the ground truth."""
+    assert TRUTH.buyer is not None and TRUTH.buyer.vat_number is None
+    fuller = TRUTH.model_copy(
+        update={"buyer": TRUTH.buyer.model_copy(update={"vat_number": "FR84213033558"})}
+    )
+    fields = compare_extraction(TRUTH, fuller)
+    assert "buyer.vat_number" not in fields
+    assert all(fields.values())
+
+
+def test_a_defined_identifier_is_still_compared() -> None:
+    wrong = TRUTH.seller.model_copy(update={"siren": "000000000"})
+    fields = compare_extraction(TRUTH, TRUTH.model_copy(update={"seller": wrong}))
+    assert fields["seller.siren"] is False
