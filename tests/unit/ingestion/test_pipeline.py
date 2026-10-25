@@ -164,3 +164,12 @@ def test_too_many_injected_passages_fail_closed(monkeypatch: pytest.MonkeyPatch)
     extractor = ScriptedExtractor(golden_extraction(GROUND_TRUTH / "INV-09.json"))
     with pytest.raises(ExtractionError, match="too many passages"):
         run(golden_pdf("INV-09"), extractor)
+
+
+def test_a_transient_extractor_failure_is_not_turned_into_a_failed_invoice() -> None:
+    """It must reach the worker, which retries the job with a backoff."""
+    from invoice_agent.domain.job import TransientJobError
+
+    extractor = ScriptedExtractor(TransientJobError("model provider unavailable (HTTP 529)"))
+    with pytest.raises(TransientJobError, match="529"):
+        run(golden_pdf("INV-09"), extractor)

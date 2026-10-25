@@ -75,7 +75,8 @@ tests/             # unit/, integration/, agent/
 ```bash
 uv sync                                   # install
 uv run pre-commit install --install-hooks # lint + commit message hooks (once)
-docker compose up -d db                    # local services (Langfuse is added with observability)
+docker compose up -d db                    # local database
+docker compose --profile observability up -d   # + Langfuse (UI on localhost:3000)
 uv run alembic upgrade head               # migrations
 uv run pytest                             # all tests
 uv run pytest tests/unit -q               # fast tests

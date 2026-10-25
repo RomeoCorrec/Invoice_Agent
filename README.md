@@ -30,9 +30,9 @@ PDF bytes -> ingest_document  (Factur-X XML parsed, or text -> extractor -> grou
           -> validated | needs_review   (a human always decides before anything is posted)
 ```
 
-The extractor for PDFs without an embedded XML is an interface (`InvoiceExtractor`); the LLM
-implementation, its prompt and the evaluation come with step 04. See `docs/adr/0003` and
-`docs/adr/0004` for the rules and the ingestion hardening.
+PDFs without an embedded XML go through an LLM extractor (Anthropic, versioned prompt, document
+treated as data). See `docs/adr/0003` and `docs/adr/0004` for the rules and the ingestion
+hardening, and `docs/adr/0006` for the LLM access.
 
 ## Running the worker
 
@@ -47,3 +47,35 @@ uv run python -m invoice_agent.worker             # process jobs until SIGINT / 
 Jobs live in the `jobs` table: claimed with `FOR UPDATE SKIP LOCKED`, leased, retried with
 exponential backoff, and marked `dead` after the last attempt. The PDF parser runs in a child
 process with a deadline. See `docs/adr/0005-worker.md`.
+
+## Observability and evaluation
+
+Every model call goes through `llm/`: it is timed, bounded, priced and traced in
+[Langfuse](https://langfuse.com), which runs locally from the compose file.
+
+```bash
+docker compose --profile observability up -d      # Langfuse on http://localhost:3000
+uv run --env-file .env python -m invoice_agent.worker
+```
+
+Set `ANTHROPIC_API_KEY` and the `LANGFUSE_*` variables in `.env` (see `.env.example`; the
+compose file creates the local admin account and project from them). Without Langfuse keys
+tracing is off; without an API key the worker skips PDFs that need the model.
+
+- **One trace per invoice**, across the ingestion and validation jobs; the trace id is stored
+  in the audit events. IBANs and API keys are masked before anything is sent.
+- **Evaluation** on the 21 golden invoices, also run as a Langfuse experiment on the dataset
+  `invoice-golden`:
+
+```bash
+uv run --env-file .env python -m evals.run --suite smoke --dry-run   # plan and worst-case cost
+uv run --env-file .env python -m evals.run --suite full --yes --max-cost 0.25
+```
+
+Calling the API costs money: nothing is sent without `--yes`, and `--max-cost` stops the run.
+
+First measurement (Haiku 5.5, 21 invoices, 0.01 USD in total): field accuracy 94.5 %,
+anomaly precision 100 % and recall 84.6 % (the rest need invoice history), p50 latency
+2.5 s. One document that hides an instruction between table cells is refused by the
+grounding check, as intended. Details in [docs/evals/latest.md](docs/evals/latest.md) and
+[ADR-0006](docs/adr/0006-llm-and-observability.md).

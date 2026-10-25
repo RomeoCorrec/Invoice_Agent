@@ -36,6 +36,7 @@ def ingest_document(
     run_id: UUID,
     now: datetime,
     reader: Callable[..., RawDocument] = read_document,
+    trace_id: str | None = None,
 ) -> Invoice:
     """Store the document as an invoice: ``extracted`` on success, ``failed`` otherwise.
 
@@ -68,7 +69,7 @@ def ingest_document(
         run_id,
         now,
         step="receive",
-        payload={"uri": uri, "sha256": sha256, "size": len(content)},
+        payload=_with_trace({"uri": uri, "sha256": sha256, "size": len(content)}, trace_id),
     )
 
     if extracted is not None:
@@ -83,8 +84,13 @@ def ingest_document(
         stored = received.transition_to(InvoiceStatus.FAILED, at=now, failure_reason=failure)
         payload = {"outcome": "failed", "reason": failure}
     invoices.save(stored, expected_status=InvoiceStatus.RECEIVED)
-    _audit(events, stored, run_id, now, step="extract", payload=payload)
+    _audit(events, stored, run_id, now, step="extract", payload=_with_trace(payload, trace_id))
     return stored
+
+
+def _with_trace(payload: dict[str, JsonValue], trace_id: str | None) -> dict[str, JsonValue]:
+    """Link the audit event to its Langfuse trace, so a decision can be followed in both."""
+    return {**payload, "trace_id": trace_id} if trace_id else payload
 
 
 def _audit(

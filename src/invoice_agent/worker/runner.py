@@ -32,6 +32,7 @@ from invoice_agent.db.session import session_scope
 from invoice_agent.domain.audit import redact_payload
 from invoice_agent.domain.job import Job, PermanentJobError, RetryPolicy
 from invoice_agent.observability.logging import log_event
+from invoice_agent.observability.tracing import Tracing
 from invoice_agent.worker.handlers import Handler, JobContext
 
 logger = logging.getLogger("invoice_agent.worker")
@@ -85,6 +86,7 @@ class Worker:
         settings: WorkerSettings,
         clock: Callable[[], datetime] = utc_now,
         rng: Callable[[], float] | None = None,
+        tracing: Tracing | None = None,
     ) -> None:
         self._factory = factory
         self._worker_id = worker_id
@@ -98,6 +100,7 @@ class Worker:
             cap=timedelta(seconds=settings.backoff_cap_s),
         )
         self._rng = rng
+        self._tracing = tracing or Tracing()
         self._stop = threading.Event()
 
     # -- control ------------------------------------------------------------------------
@@ -152,10 +155,20 @@ class Worker:
             handler = self._handlers.get(job.kind)
             if handler is None:
                 raise PermanentJobError(f"unknown job kind {job.kind!r}")
-            with session_scope(self._factory) as session:
-                now = self._clock()
-                handler(job, self._context_for(session, now))
-                JobRepository(session).succeed(job.id, self._worker_id, now=now)
+            with self._tracing.observation(
+                f"job.{job.kind}",
+                trace_id=self._trace_id_for(job),
+                input={"job_id": str(job.id), "attempt": job.attempts},
+                metadata={"worker": self._worker_id},
+            ) as span:
+                try:
+                    with session_scope(self._factory) as session:
+                        now = self._clock()
+                        handler(job, self._context_for(session, now))
+                        JobRepository(session).succeed(job.id, self._worker_id, now=now)
+                except Exception as exc:
+                    span.update(level="ERROR", status_message=describe_error(exc))
+                    raise
         except LeaseLostError:
             log_event(logger, "lease_lost", level=logging.WARNING, **fields)
             return
@@ -167,6 +180,17 @@ class Worker:
             return
         duration_ms = round((time.monotonic() - started) * 1000, 1)
         log_event(logger, "job_succeeded", duration_ms=duration_ms, **fields)
+
+    def _trace_id_for(self, job: Job) -> str | None:
+        """The trace of the invoice this job belongs to.
+
+        A job inherits the trace its predecessor put in its payload; otherwise the trace id
+        derives from the job id, so the retries of one job land in one trace.
+        """
+        inherited = job.payload.get("trace_id")
+        if isinstance(inherited, str):
+            return inherited
+        return self._tracing.trace_id_for(str(job.id))
 
     def _record_failure(
         self, job: Job, error: str, *, permanent: bool, fields: dict[str, Any]

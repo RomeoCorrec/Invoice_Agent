@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from invoice_agent.config import IngestionLimits
 from invoice_agent.domain.invoice import InvoiceData, SourceFormat
+from invoice_agent.domain.job import TransientJobError
 from invoice_agent.domain.rules.injection import (
     MAX_PASSAGES,
     suspicious_passages,
@@ -50,18 +51,28 @@ def extract_invoice(
     text = raw.text
     if text is None:
         raise ExtractionError("the document reader returned no text")
+    data = extract_from_text(text, extractor, iban_key)
+    return ExtractedDocument(SourceFormat.PDF, raw.sha256, data)
+
+
+def extract_from_text(text: str, extractor: InvoiceExtractor, iban_key: bytes) -> InvoiceData:
+    """The text branch: extractor, injected passages found in the text, grounding check.
+
+    Public so that evaluations can exercise the language model on any document's text, not
+    only on the PDFs that have no embedded XML.
+    """
     try:
         data = extractor.extract(text)
-    except ExtractionError:
-        raise
-    except Exception as exc:  # a provider, network or parsing failure: never leak its details
+    except (ExtractionError, TransientJobError):
+        raise  # a transient failure must reach the worker, which retries; not a failed invoice
+    except Exception as exc:  # an unexpected failure: never leak its details
         raise ExtractionError(f"the extractor failed ({type(exc).__name__})") from exc
     passages = suspicious_passages(text)
     if len(passages) > MAX_PASSAGES:
         raise ExtractionError("the document contains too many passages aimed at an AI system")
     data = _with_notes(data, passages)
     verify_grounded(data, text, iban_key, excluded=passages)
-    return ExtractedDocument(SourceFormat.PDF, raw.sha256, data)
+    return data
 
 
 def _with_notes(data: InvoiceData, passages: list[str]) -> InvoiceData:
