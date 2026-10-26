@@ -30,7 +30,7 @@ from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.worker.handlers import HANDLERS, JobContext, process_job
 from invoice_agent.worker.runner import Worker
-from invoice_agent.worker.store import LocalDocumentStore
+from invoice_agent.worker.store import DocumentStore, LocalDocumentStore
 
 logger = logging.getLogger("invoice_agent.worker")
 
@@ -55,12 +55,16 @@ def build_agent_graph(
     tracing: Tracing,
     extractor: InvoiceExtractor | None,
     saver: BaseCheckpointSaver[Any],
+    store: DocumentStore | None = None,
 ) -> Graph:
-    """The agent graph wired with the production dependencies (shared by the worker and the CLI)."""
+    """The agent graph wired with the production dependencies (shared by the worker and the CLI).
+
+    Without a ``store`` the documents come from ``DOCUMENT_ROOT``, which must then be set.
+    """
     return build_graph(
         AgentDeps(
             session_factory=factory,
-            store=LocalDocumentStore(require_document_root(settings)),
+            store=store or LocalDocumentStore(require_document_root(settings)),
             extractor=extractor,
             iban_key=settings.iban_hash_key,
             limits=settings.limits,

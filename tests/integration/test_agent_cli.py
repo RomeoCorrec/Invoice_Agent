@@ -123,3 +123,11 @@ def test_text_from_a_document_cannot_drive_the_terminal(
     out = capsys.readouterr().out
     assert "\x1b" not in out and "\r" not in out and "‮" not in out
     assert len(out.splitlines()) == 2  # still one line per invoice
+
+
+def test_deciding_needs_no_document_root(waiting: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Approving reads no document, so a reviewer's machine does not need the store."""
+    factory, ids = waiting
+    monkeypatch.delenv("DOCUMENT_ROOT")
+    assert main(["approve", str(ids["INV-01"]), "--by", "alice"]) == 0
+    assert status(factory, ids["INV-01"]) is InvoiceStatus.APPROVED

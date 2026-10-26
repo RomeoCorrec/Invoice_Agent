@@ -30,6 +30,7 @@ from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.observability.logging import configure_logging
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.worker.main import build_agent_graph
+from invoice_agent.worker.store import NoDocumentStore
 
 logger = logging.getLogger("invoice_agent.agent")
 
@@ -90,7 +91,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 2
         with open_checkpointer(settings.database_url) as saver:
-            graph = build_agent_graph(settings, factory, Tracing.from_env(os.environ), None, saver)
+            graph = build_agent_graph(
+                settings, factory, Tracing.from_env(os.environ), None, saver, NoDocumentStore()
+            )
             try:
                 result = resume_run(graph, factory, args.invoice_id, decision)
             except NoPendingApprovalError as exc:
