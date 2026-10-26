@@ -110,3 +110,16 @@ def test_seed_loads_the_demo_suppliers_and_orders(
         suppliers = connection.execute(text("SELECT count(*) FROM suppliers")).scalar_one()
         orders = connection.execute(text("SELECT count(*) FROM purchase_orders")).scalar_one()
     assert suppliers >= 5 and orders >= 5
+
+
+def test_text_from_a_document_cannot_drive_the_terminal(
+    waiting: Any, engine: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A hostile invoice number or supplier name must not smuggle escape sequences."""
+    hostile = "A\x1b[2J\x1b[31m\r‮FAKE approved"
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE invoices SET invoice_number = :n"), {"n": hostile})
+    assert main(["pending"]) == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out and "\r" not in out and "‮" not in out
+    assert len(out.splitlines()) == 2  # still one line per invoice
