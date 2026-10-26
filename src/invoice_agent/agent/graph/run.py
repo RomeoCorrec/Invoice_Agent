@@ -14,9 +14,9 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from sqlalchemy.orm import Session, sessionmaker
 
-from invoice_agent.agent.graph.nodes import STEP_RECEIVE
+from invoice_agent.agent.graph.nodes import REVIEWABLE, STEP_RECEIVE
 from invoice_agent.agent.graph.state import AgentState, ApprovalDecision
-from invoice_agent.db.repositories import AuditEventRepository
+from invoice_agent.db.repositories import AuditEventRepository, InvoiceRepository
 from invoice_agent.db.session import session_scope
 
 Graph = CompiledStateGraph[AgentState, None, AgentState, AgentState]
@@ -84,3 +84,21 @@ def resume_run(
         raise NoPendingApprovalError(f"no run is waiting for a decision on invoice {invoice_id}")
     graph.invoke(Command(resume=decision.model_dump(mode="json")), _config(run_id))
     return run_status(graph, run_id)
+
+
+def pending_approvals(graph: Graph, session_factory: sessionmaker[Session]) -> list[dict[str, Any]]:
+    """The requests of the runs that are waiting for a human, oldest invoice first.
+
+    An invoice can be ``validated`` without a run waiting on it (it was handled before the
+    graph existed, or its run is gone): it is not listed, because it could not be decided.
+    """
+    with session_scope(session_factory) as session:
+        invoices = InvoiceRepository(session)
+        candidates = [i for status in REVIEWABLE for i in invoices.list_by_status(status)]
+        runs = [run_id_for_invoice(session, invoice.id) for invoice in candidates]
+    requests = []
+    for run_id in runs:
+        request = run_status(graph, run_id).awaiting_approval if run_id else None
+        if request is not None:
+            requests.append(request)
+    return requests

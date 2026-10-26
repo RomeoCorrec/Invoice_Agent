@@ -1,6 +1,7 @@
 """The review command: list what the agent paused on, then decide."""
 
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -11,6 +12,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.__main__ import main
 from invoice_agent.agent.graph.run import start_run
+from invoice_agent.agent.ingestion import ingest_document
+from invoice_agent.agent.validation import validate_invoice
+from invoice_agent.config import IngestionLimits
 from invoice_agent.db.repositories import InvoiceRepository
 from invoice_agent.db.session import make_session_factory, session_scope
 from invoice_agent.domain.invoice_status import InvoiceStatus
@@ -131,3 +135,27 @@ def test_deciding_needs_no_document_root(waiting: Any, monkeypatch: pytest.Monke
     monkeypatch.delenv("DOCUMENT_ROOT")
     assert main(["approve", str(ids["INV-01"]), "--by", "alice"]) == 0
     assert status(factory, ids["INV-01"]) is InvoiceStatus.APPROVED
+
+
+def test_an_invoice_validated_without_a_run_is_not_listed(
+    waiting: Any, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Validated before the graph existed: nobody could decide it, so it is not offered."""
+    factory, ids = waiting
+    [pdf] = INVOICES.glob("INV-02_*.pdf")
+    with session_scope(factory) as session:
+        legacy = ingest_document(
+            session,
+            pdf.read_bytes(),
+            pdf.name,
+            extractor=lookup_extractor(),
+            iban_key=IBAN_KEY,
+            limits=IngestionLimits(),
+            run_id=uuid4(),
+            now=datetime.now(UTC),
+        )
+        validate_invoice(session, legacy.id, run_id=uuid4(), now=datetime.now(UTC))
+    assert main(["pending"]) == 0
+    out = capsys.readouterr().out
+    assert str(legacy.id) not in out
+    assert str(ids["INV-01"]) in out and len(out.splitlines()) == 2

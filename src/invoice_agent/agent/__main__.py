@@ -14,19 +14,17 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph.checkpoint import open_checkpointer
-from invoice_agent.agent.graph.run import NoPendingApprovalError, resume_run
+from invoice_agent.agent.graph.run import NoPendingApprovalError, pending_approvals, resume_run
 from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.config import ConfigError, load_settings
 from invoice_agent.db.reference_data import load_reference_data
-from invoice_agent.db.repositories import AuditEventRepository, InvoiceRepository
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
-from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.observability.logging import configure_logging
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.worker.main import build_agent_graph
@@ -72,7 +70,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     factory = make_session_factory(engine)
     try:
         if args.command == "pending":
-            return _pending(factory)
+            with open_checkpointer(settings.database_url) as saver:
+                graph = build_agent_graph(
+                    settings, factory, Tracing(), None, saver, NoDocumentStore()
+                )
+                _print_pending(pending_approvals(graph, factory))
+            return 0
         if args.command == "seed":
             with session_scope(factory) as session:
                 loaded = load_reference_data(session, args.source, settings.iban_hash_key)
@@ -105,34 +108,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         engine.dispose()
 
 
-def _pending(factory: sessionmaker[Session]) -> int:
-    waiting = (InvoiceStatus.VALIDATED, InvoiceStatus.NEEDS_REVIEW)
-    with session_scope(factory) as session:
-        invoices = [
-            i for status in waiting for i in InvoiceRepository(session).list_by_status(status)
-        ]
-        if not invoices:
-            print("nothing is waiting for a decision")
-        for invoice in invoices:
-            data = invoice.data
-            assert data is not None
-            codes = _anomaly_codes(session, invoice.id)
-            print(
-                f"{invoice.id}  {invoice.status.value:<12} "
-                f"{safe_text(data.invoice_number, 16):<16} {safe_text(data.seller.name, 28):<28} "
-                f"{data.total_ttc:>10} {safe_text(data.currency, 3)}"
-                + (f"  [{safe_text(', '.join(codes), 120)}]" if codes else "")
-            )
-    return 0
-
-
-def _anomaly_codes(session: Session, invoice_id: UUID) -> list[str]:
-    for event in AuditEventRepository(session).list_for_invoice(invoice_id):
-        if event.step == "validate":
-            anomalies = event.payload.get("anomalies", [])
-            if isinstance(anomalies, list):
-                return [str(a["code"]) for a in anomalies if isinstance(a, dict) and "code" in a]
-    return []
+def _print_pending(requests: list[dict[str, Any]]) -> None:
+    if not requests:
+        print("nothing is waiting for a decision")
+    for request in requests:
+        codes = ", ".join(str(code) for code in request["anomaly_codes"])
+        print(
+            f"{request['invoice_id']}  {safe_text(request['status'], 12):<12} "
+            f"{safe_text(request['invoice_number'], 16):<16} "
+            f"{safe_text(request['seller'], 28):<28} "
+            f"{request['total_ttc']:>10} {safe_text(request['currency'], 3)}"
+            + (f"  [{safe_text(codes, 120)}]" if codes else "")
+        )
 
 
 if __name__ == "__main__":
