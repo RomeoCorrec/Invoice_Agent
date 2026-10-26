@@ -9,14 +9,12 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from invoice_agent.config import IngestionLimits, WorkerSettings
+from invoice_agent.config import WorkerSettings
 from invoice_agent.db.repositories import JobRepository
 from invoice_agent.db.session import make_session_factory, session_scope
 from invoice_agent.domain.job import Job, JobStatus, PermanentJobError
 from invoice_agent.worker.handlers import Handler, JobContext
 from invoice_agent.worker.runner import Worker
-from invoice_agent.worker.store import LocalDocumentStore
-from tests.factories import IBAN_KEY
 
 T0 = datetime(2026, 10, 24, 9, 0, tzinfo=UTC)
 SETTINGS = WorkerSettings(
@@ -46,15 +44,7 @@ def make_worker(
     settings: WorkerSettings = SETTINGS,
 ) -> Worker:
     def context_for(session: Session, now: datetime) -> JobContext:
-        return JobContext(
-            session=session,
-            now=now,
-            store=LocalDocumentStore(tmp_path),
-            extractor=None,
-            iban_key=IBAN_KEY,
-            limits=IngestionLimits(),
-            max_attempts=settings.max_attempts,
-        )
+        return JobContext(session=session, now=now)
 
     return Worker(
         factory,

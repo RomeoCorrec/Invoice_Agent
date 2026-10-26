@@ -85,6 +85,8 @@ def make_ingest(deps: AgentDeps) -> Node:
                 reader=deps.reader,
                 trace_id=state.get("trace_id"),
             )
+        extracted = invoice.status is InvoiceStatus.EXTRACTED
+        deps.tracing.score("extraction_ok", extracted, comment=invoice.failure_reason)
         return {"invoice_id": str(invoice.id), "status": invoice.status.value}
 
     return ingest
@@ -114,6 +116,7 @@ def make_validate(deps: AgentDeps) -> Node:
                 )
             except (InvoiceNotFoundError, NotReadyForValidationError) as exc:
                 raise PermanentJobError(str(exc)) from exc
+        deps.tracing.score("anomaly_count", len(result.anomalies))
         return {
             "status": result.status.value,
             "anomaly_codes": [anomaly.code.value for anomaly in result.anomalies],
