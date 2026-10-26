@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from langfuse import Langfuse
+from opentelemetry import trace as otel_trace
 
 from invoice_agent.domain.iban import redact_ibans
 
@@ -74,7 +75,10 @@ class Tracing:
         return self._client.create_trace_id(seed=seed) if self._client else None
 
     def current_trace_id(self) -> str | None:
-        return self._client.get_current_trace_id() if self._client else None
+        """The trace of the open span, or ``None`` when no span is open."""
+        if self._client is None or not otel_trace.get_current_span().get_span_context().is_valid:
+            return None
+        return self._client.get_current_trace_id()
 
     @contextmanager
     def observation(
