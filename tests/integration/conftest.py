@@ -47,8 +47,9 @@ def _empty_tables(request: pytest.FixtureRequest) -> Iterator[None]:
     with engine.begin() as connection:
         tables = connection.execute(
             text(
-                "SELECT string_agg(quote_ident(tablename), ', ') FROM pg_tables "
-                "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
+                "SELECT string_agg(quote_ident(schemaname) || '.' || quote_ident(tablename), ', ') "
+                "FROM pg_tables WHERE schemaname IN ('public', 'ledger') "
+                "AND tablename <> 'alembic_version'"
             )
         ).scalar_one()
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
