@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TextIO
 
 from invoice_agent.domain.audit import redact_payload
 
@@ -37,8 +37,10 @@ def log_event(
     logger.log(level, event, extra={"fields": fields})
 
 
-def configure_logging(level: str = "INFO") -> None:
-    handler = logging.StreamHandler(sys.stdout)
+def configure_logging(level: str = "INFO", stream: TextIO | None = None) -> None:
+    """Log to ``stream`` (stdout by default). A stdio MCP server must pass stderr: stdout
+    carries the protocol."""
+    handler = logging.StreamHandler(stream or sys.stdout)
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers[:] = [handler]
