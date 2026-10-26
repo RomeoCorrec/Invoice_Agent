@@ -13,13 +13,12 @@ import pytest
 from langfuse import Langfuse
 from langgraph.checkpoint.postgres import PostgresSaver
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from psycopg import Connection
-from psycopg.rows import dict_row
 from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph import build
 from invoice_agent.agent.graph.build import build_graph
+from invoice_agent.agent.graph.checkpoint import open_checkpointer
 from invoice_agent.agent.graph.deps import AgentDeps
 from invoice_agent.agent.graph.nodes import StaleApprovalError
 from invoice_agent.agent.graph.run import (
@@ -89,26 +88,17 @@ def document(documents: Path, case: str) -> str:
     return path.name
 
 
-@pytest.fixture
-def connection(postgres_url: str) -> Iterator[Connection[Any]]:
-    dsn = postgres_url.replace("+psycopg", "")
-    with Connection.connect(dsn, autocommit=True, prepare_threshold=0, row_factory=dict_row) as c:
-        yield c
-
-
 NOT_GIVEN: Any = object()
 
 
 def graph_for(
     factory: sessionmaker[Session],
     documents: Path,
-    connection: Connection[Any],
+    saver: PostgresSaver,
     *,
     extractor: Any = NOT_GIVEN,
     tracing: Tracing | None = None,
 ) -> Graph:
-    saver = PostgresSaver(connection)
-    saver.setup()
     deps = AgentDeps(
         session_factory=factory,
         store=LocalDocumentStore(documents),
@@ -123,10 +113,10 @@ def graph_for(
 
 @pytest.fixture
 def graph_factory(
-    factory: sessionmaker[Session], documents: Path, connection: Connection[Any]
+    factory: sessionmaker[Session], documents: Path, saver: PostgresSaver
 ) -> Callable[[], Graph]:
     """Builds the graph on demand, so a test can patch a node before the graph exists."""
-    return lambda: graph_for(factory, documents, connection)
+    return lambda: graph_for(factory, documents, saver)
 
 
 @pytest.fixture
@@ -189,10 +179,10 @@ def test_an_invoice_with_an_anomaly_waits_as_needs_review(
 
 
 def test_a_document_that_cannot_be_read_ends_the_run_as_failed(
-    factory: sessionmaker[Session], documents: Path, connection: Connection[Any]
+    factory: sessionmaker[Session], documents: Path, saver: PostgresSaver
 ) -> None:
     # INV-09 is a plain PDF: with no extractor configured it cannot be read
-    graph = graph_for(factory, documents, connection, extractor=None)
+    graph = graph_for(factory, documents, saver, extractor=None)
     run = start(graph, document(documents, "INV-09"))
     assert run.finished and run.awaiting_approval is None
     assert status_of(factory, run.state["invoice_id"]) is InvoiceStatus.FAILED
@@ -319,14 +309,13 @@ def test_an_invoice_that_changed_meanwhile_is_not_decided(
 def test_a_run_waiting_for_a_human_survives_a_restart(
     factory: sessionmaker[Session], documents: Path, postgres_url: str
 ) -> None:
-    dsn = postgres_url.replace("+psycopg", "")
-    with Connection.connect(dsn, autocommit=True, prepare_threshold=0, row_factory=dict_row) as c1:
-        first = graph_for(factory, documents, c1)
+    with open_checkpointer(postgres_url) as first_saver:
+        first = graph_for(factory, documents, first_saver)
         run = start(first, document(documents, "INV-01"))
     invoice_id = UUID(run.state["invoice_id"])
     # a new process: new connection, new graph, nothing in memory
-    with Connection.connect(dsn, autocommit=True, prepare_threshold=0, row_factory=dict_row) as c2:
-        second = graph_for(factory, documents, c2)
+    with open_checkpointer(postgres_url) as second_saver:
+        second = graph_for(factory, documents, second_saver)
         done = resume_run(second, factory, invoice_id, APPROVE)
     assert done.finished
     assert status_of(factory, str(invoice_id)) is InvoiceStatus.APPROVED
@@ -390,7 +379,7 @@ def test_validation_replayed_after_a_crash_reports_what_it_recorded(
 def test_a_transient_failure_stops_the_run_and_a_retry_completes_it(
     factory: sessionmaker[Session],
     documents: Path,
-    connection: Connection[Any],
+    saver: PostgresSaver,
     engine: Engine,
 ) -> None:
     class Flaky:
@@ -402,7 +391,7 @@ def test_a_transient_failure_stops_the_run_and_a_retry_completes_it(
                 raise TransientJobError("model provider unavailable")
             return lookup_extractor().extract(text)
 
-    graph = graph_for(factory, documents, connection, extractor=Flaky())
+    graph = graph_for(factory, documents, saver, extractor=Flaky())
     run_id = uuid4()
     with pytest.raises(TransientJobError):
         start(graph, document(documents, "INV-09"), run_id)
@@ -454,10 +443,10 @@ def test_every_node_joins_the_trace_of_the_run(
     traced: tuple[Tracing, InMemorySpanExporter],
     factory: sessionmaker[Session],
     documents: Path,
-    connection: Connection[Any],
+    saver: PostgresSaver,
 ) -> None:
     tracing, exporter = traced
-    graph = graph_for(factory, documents, connection, tracing=tracing)
+    graph = graph_for(factory, documents, saver, tracing=tracing)
     run_id = uuid4()
     trace_id = tracing.trace_id_for(f"run:{run_id}")
     assert trace_id is not None

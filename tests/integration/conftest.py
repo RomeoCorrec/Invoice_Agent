@@ -9,9 +9,12 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from langgraph.checkpoint.postgres import PostgresSaver
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session
 from testcontainers.community.postgres import PostgresContainer
+
+from invoice_agent.agent.graph.checkpoint import open_checkpointer
 
 ROOT = Path(__file__).parents[2]
 
@@ -61,3 +64,11 @@ def session(engine: Engine) -> Iterator[Session]:
     with Session(engine) as session:
         yield session
         session.rollback()
+
+
+@pytest.fixture(scope="session")
+def saver(postgres_url: str) -> Iterator[PostgresSaver]:
+    """LangGraph's checkpoint store on the test database (its tables are emptied with the rest
+    after each test, and created once here)."""
+    with open_checkpointer(postgres_url) as saver:
+        yield saver
