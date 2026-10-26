@@ -1,6 +1,7 @@
 """The agent graph against a real Postgres: the pause for a human, resuming, and surviving
 crashes (the database holds both the business data and the checkpoints)."""
 
+import json
 import shutil
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
@@ -9,10 +10,12 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from langfuse import Langfuse
 from langgraph.checkpoint.postgres import PostgresSaver
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from psycopg import Connection
 from psycopg.rows import dict_row
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph import build
@@ -35,6 +38,7 @@ from invoice_agent.db.session import make_session_factory, session_scope
 from invoice_agent.domain.audit import ActorType
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.domain.job import TransientJobError
+from invoice_agent.observability.tracing import Tracing, mask
 from invoice_agent.worker.store import LocalDocumentStore
 from tests.factories import GROUND_TRUTH, IBAN_KEY, golden_extraction
 from tests.fakes import LookupExtractor
@@ -101,6 +105,7 @@ def graph_for(
     connection: Connection[Any],
     *,
     extractor: Any = NOT_GIVEN,
+    tracing: Tracing | None = None,
 ) -> Graph:
     saver = PostgresSaver(connection)
     saver.setup()
@@ -111,6 +116,7 @@ def graph_for(
         iban_key=IBAN_KEY,
         limits=IngestionLimits(),
         clock=SteppingClock(),
+        tracing=tracing or Tracing(),
     )
     return build_graph(deps, saver)
 
@@ -225,21 +231,34 @@ def test_rejecting_is_terminal_and_keeps_the_comment(
     assert approval.payload["comment"] == "no" and approval.payload["from"] == "needs_review"
 
 
-def test_a_bank_account_typed_in_a_comment_never_reaches_the_audit_log(
-    graph: Graph, factory: sessionmaker[Session], documents: Path
+def test_a_bank_account_typed_in_a_comment_is_stored_nowhere(
+    graph: Graph, factory: sessionmaker[Session], documents: Path, engine: Engine
 ) -> None:
+    iban = "FR7699053965263585803695442"
     run = start(graph, document(documents, "INV-01"))
     invoice_id = UUID(run.state["invoice_id"])
-    comment = "paid to FR7699053965263585803695442 as agreed"
-    resume_run(
-        graph,
-        factory,
-        invoice_id,
-        ApprovalDecision(verdict=Verdict.APPROVE, approver="a", comment=comment),
-    )
+    comment = f"paid to {iban} as agreed"
+    decision = ApprovalDecision(verdict=Verdict.APPROVE, approver=f"bob {iban}", comment=comment)
+    assert iban not in (decision.comment or "") + decision.approver  # redacted on construction
+    resume_run(graph, factory, invoice_id, decision)
     with session_scope(factory) as session:
-        stored = AuditEventRepository(session).list_for_invoice(invoice_id)[-1].payload["comment"]
-    assert isinstance(stored, str) and "FR7699053965263585803695442" not in stored
+        stored = AuditEventRepository(session).list_for_invoice(invoice_id)[-1]
+    assert iban not in json.dumps(stored.payload) + stored.actor_id
+    # nor in any checkpoint table: the state and the resume value are stored there too
+    with engine.connect() as connection:
+        for table, column in (
+            ("checkpoints", "checkpoint::text"),
+            ("checkpoint_blobs", "blob"),
+            ("checkpoint_writes", "blob"),
+        ):
+            expression = (
+                column if column.endswith("::text") else f"convert_from({column}, 'LATIN1')"
+            )
+            found = connection.execute(
+                text(f"SELECT count(*) FROM {table} WHERE position(:iban in {expression}) > 0"),
+                {"iban": iban},
+            ).scalar_one()
+            assert found == 0, table
 
 
 def test_a_second_decision_changes_nothing(
@@ -412,3 +431,56 @@ def test_the_graph_draws_itself(graph: Graph) -> None:
     mermaid = graph.get_graph().draw_mermaid()
     for node in ("ingest", "validate", "request_approval", "apply_decision"):
         assert node in mermaid
+
+
+# --- tracing -------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def traced() -> Iterator[tuple[Tracing, InMemorySpanExporter]]:
+    exporter = InMemorySpanExporter()
+    client = Langfuse(
+        public_key=f"pk-test-{uuid4().hex}",
+        secret_key="sk-test",
+        base_url="http://127.0.0.1:9",
+        span_exporter=exporter,
+        mask=mask,
+    )
+    yield Tracing(client), exporter
+    client.shutdown()
+
+
+def test_every_node_joins_the_trace_of_the_run(
+    traced: tuple[Tracing, InMemorySpanExporter],
+    factory: sessionmaker[Session],
+    documents: Path,
+    connection: Connection[Any],
+) -> None:
+    tracing, exporter = traced
+    graph = graph_for(factory, documents, connection, tracing=tracing)
+    run_id = uuid4()
+    trace_id = tracing.trace_id_for(f"run:{run_id}")
+    assert trace_id is not None
+
+    run = start_run(graph, run_id=run_id, document=document(documents, "INV-01"), trace_id=trace_id)
+    # a later process resumes the run: no span is open, the nodes join the trace by its id
+    resume_run(graph, factory, UUID(run.state["invoice_id"]), APPROVE)
+
+    tracing.flush()
+    recorded = exporter.get_finished_spans()
+    nodes = [s for s in recorded if s.name.startswith("node.")]
+    assert {s.name for s in nodes} == {
+        "node.ingest", "node.validate", "node.request_approval", "node.apply_decision",
+    }  # fmt: skip
+    assert {format(s.context.trace_id, "032x") for s in nodes} == {trace_id}
+
+    # the approval node ran twice: it paused, then ran again with the answer
+    approvals = [s for s in nodes if s.name == "node.request_approval"]
+    assert len(approvals) == 2
+    assert any(
+        "waiting for a human decision" in json.dumps(dict(s.attributes or {})) for s in approvals
+    )
+
+    with session_scope(factory) as session:
+        events = AuditEventRepository(session).list_for_run(run_id)
+    assert {e.payload["trace_id"] for e in events if "trace_id" in e.payload} == {trace_id}

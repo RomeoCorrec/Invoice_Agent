@@ -7,7 +7,9 @@ stores it in the database, and invoice content is untrusted input.
 from enum import StrEnum
 from typing import Annotated, Any, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
+from invoice_agent.domain.iban import redact_ibans
 
 Approver = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
@@ -25,6 +27,13 @@ class ApprovalDecision(BaseModel):
     verdict: Verdict
     approver: Approver
     comment: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("approver", "comment")
+    @classmethod
+    def _no_bank_details(cls, value: str | None) -> str | None:
+        """A decision is stored in the checkpoint as well as in the audit log: redact bank
+        details here, before it goes anywhere, not at each place that writes it."""
+        return redact_ibans(value) if value is not None else None
 
 
 class AgentState(TypedDict, total=False):
