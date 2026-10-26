@@ -1,5 +1,6 @@
 """Review the invoices the agent has paused on.
 
+    uv run python -m invoice_agent.agent seed          # demo suppliers and purchase orders
     uv run python -m invoice_agent.agent pending
     uv run python -m invoice_agent.agent approve <invoice-id> --by alice@example.com
     uv run python -m invoice_agent.agent reject <invoice-id> --by alice@example.com --comment "..."
@@ -12,6 +13,7 @@ import logging
 import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -21,6 +23,7 @@ from invoice_agent.agent.graph.checkpoint import open_checkpointer
 from invoice_agent.agent.graph.run import NoPendingApprovalError, resume_run
 from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.config import ConfigError, load_settings
+from invoice_agent.db.reference_data import load_reference_data
 from invoice_agent.db.repositories import AuditEventRepository, InvoiceRepository
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
 from invoice_agent.domain.invoice_status import InvoiceStatus
@@ -29,12 +32,15 @@ from invoice_agent.observability.tracing import Tracing
 from invoice_agent.worker.main import build_agent_graph
 
 logger = logging.getLogger("invoice_agent.agent")
+DEMO_REFERENCE = Path(__file__).parents[3] / "tests" / "fixtures" / "invoice-test-set" / "reference"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="invoice_agent.agent")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("pending", help="list the invoices waiting for a decision")
+    seed = commands.add_parser("seed", help="load the demo suppliers and purchase orders")
+    seed.add_argument("--from", dest="source", type=Path, default=DEMO_REFERENCE)
     for name in ("approve", "reject"):
         command = commands.add_parser(name, help=f"{name} an invoice")
         command.add_argument("invoice_id", type=UUID)
@@ -53,6 +59,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "pending":
             return _pending(factory)
+        if args.command == "seed":
+            with session_scope(factory) as session:
+                loaded = load_reference_data(session, args.source, settings.iban_hash_key)
+            print(f"loaded {len(loaded)} suppliers and their purchase orders")
+            return 0
         try:
             decision = ApprovalDecision(
                 verdict=Verdict.APPROVE if args.command == "approve" else Verdict.REJECT,

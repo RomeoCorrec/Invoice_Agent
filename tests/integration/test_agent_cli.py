@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.__main__ import main
@@ -94,3 +94,19 @@ def test_an_empty_approver_is_refused_before_anything_happens(
     assert main(["approve", str(ids["INV-01"]), "--by", "  "]) == 2
     assert "invalid decision: approver" in capsys.readouterr().err
     assert status(factory, ids["INV-01"]) is InvoiceStatus.VALIDATED
+
+
+def test_seed_loads_the_demo_suppliers_and_orders(
+    engine: Engine,
+    postgres_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("IBAN_HASH_KEY", IBAN_KEY.decode().ljust(16, "k"))
+    assert main(["seed"]) == 0
+    assert "loaded" in capsys.readouterr().out
+    with engine.connect() as connection:
+        suppliers = connection.execute(text("SELECT count(*) FROM suppliers")).scalar_one()
+        orders = connection.execute(text("SELECT count(*) FROM purchase_orders")).scalar_one()
+    assert suppliers >= 5 and orders >= 5
