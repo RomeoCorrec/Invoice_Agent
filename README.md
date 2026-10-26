@@ -79,3 +79,23 @@ anomaly precision 100 % and recall 84.6 % (the rest need invoice history), p50 l
 2.5 s. One document that hides an instruction between table cells is refused by the
 grounding check, as intended. Details in [docs/evals/latest.md](docs/evals/latest.md) and
 [ADR-0006](docs/adr/0006-llm-and-observability.md).
+
+## The ledger and its tools
+
+The accounting system the agent posts to is a mock, kept apart from the agent on purpose: its
+own Postgres schema (`ledger`) and an MCP server that is the only way in.
+
+```bash
+uv run alembic upgrade head          # creates the ledger schema
+uv run python -m ledger seed         # suppliers, purchase orders and chart of accounts
+uv run python -m ledger              # MCP server over stdio (use --read-only to drop the write tool)
+```
+
+Five read tools (`get_supplier`, `list_open_purchase_orders`, `get_purchase_order`,
+`find_invoices`, `get_chart_of_accounts`) and one write tool, `post_journal_entry`, which needs
+an idempotency key: posting twice writes once, the same key with another content is refused,
+and an invoice is booked once whatever the key. Posted entries cannot be changed.
+
+On the agent side, `invoice_agent.tools.ledger` gives a `LedgerReader` and a `LedgerWriter`
+over one connection with explicit timeouts and bounded retries. See
+[ADR-0008](docs/adr/0008-ledger-mcp.md).

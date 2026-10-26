@@ -87,6 +87,8 @@ uv run python -m evals.run --suite full   # full eval
 uv run uvicorn invoice_agent.api.main:app --reload
 uv run python -m invoice_agent.worker enqueue   # queue the PDFs under DOCUMENT_ROOT
 uv run python -m invoice_agent.worker           # run a worker (SIGINT/SIGTERM stop it cleanly)
+uv run python -m ledger seed                    # load the reference data into the ledger schema
+uv run python -m ledger                         # serve the ledger over stdio (clients start it themselves)
 ```
 
 Keep this section up to date when commands change.
