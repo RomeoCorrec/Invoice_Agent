@@ -22,17 +22,56 @@ evaluation lives in `tests/fixtures/invoice-test-set/`.
 Settings come from environment variables (see `.env.example`): `DATABASE_URL`, `IBAN_HASH_KEY`
 (at least 16 characters, keeps IBANs out of the database) and optional ingestion limits.
 
-## Processing an invoice
+## The agent
 
-```text
-PDF bytes -> ingest_document  (Factur-X XML parsed, or text -> extractor -> grounding check)
-          -> validate_invoice (VAT, totals, SIREN, IBAN, duplicates, PO matching, injection)
-          -> validated | needs_review   (a human always decides before anything is posted)
+A [LangGraph](https://langchain-ai.github.io/langgraph/) graph runs each invoice, with its
+state checkpointed in Postgres. The model is used only to read PDFs without an embedded XML;
+every other step is deterministic Python, and nothing is decided without a human.
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	ingest(ingest)
+	validate(validate)
+	request_approval(request_approval)
+	apply_decision(apply_decision)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> ingest;
+	ingest -.-> __end__;
+	ingest -.-> validate;
+	request_approval --> apply_decision;
+	validate --> request_approval;
+	apply_decision --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
 ```
 
-PDFs without an embedded XML go through an LLM extractor (Anthropic, versioned prompt, document
-treated as data). See `docs/adr/0003` and `docs/adr/0004` for the rules and the ingestion
-hardening, and `docs/adr/0006` for the LLM access.
+- `ingest` and `validate` wrap the services of the earlier steps (Factur-X or LLM extraction,
+  then VAT, totals, SIREN, IBAN, duplicates, purchase-order matching, injection checks).
+- `request_approval` stops the run with `interrupt`. The reviewer is shown figures and anomaly
+  codes, never the document text. The run waits in the database, across restarts.
+- `apply_decision` approves or rejects, and records who decided in the audit log.
+- Each node has its own transaction and can be replayed: if the process dies after a node
+  committed and before its checkpoint was written, the run continues without ingesting or
+  validating twice. A provider outage retries the job from the last checkpoint.
+- Proposing the accounting entry, posting it through the MCP ledger, and explaining anomalies
+  come in the next steps ([ADR-0007](docs/adr/0007-agent-graph-and-tools.md),
+  [ADR-0009](docs/adr/0009-graph-in-the-worker.md)).
+
+```bash
+uv run python -m invoice_agent.agent seed                  # demo suppliers and purchase orders
+uv run python -m invoice_agent.worker enqueue              # queue the PDFs under DOCUMENT_ROOT
+uv run python -m invoice_agent.worker                      # runs each invoice up to the pause
+uv run python -m invoice_agent.agent pending               # what is waiting for a decision
+uv run python -m invoice_agent.agent approve <invoice-id> --by you@example.com
+uv run python -m invoice_agent.agent reject  <invoice-id> --by you@example.com --comment "..."
+```
 
 ## Running the worker
 
@@ -44,7 +83,7 @@ uv run python -m invoice_agent.worker enqueue     # queue every PDF under DOCUME
 uv run python -m invoice_agent.worker             # process jobs until SIGINT / SIGTERM
 ```
 
-Jobs live in the `jobs` table: claimed with `FOR UPDATE SKIP LOCKED`, leased, retried with
+There is one kind of job, `process`: it runs the graph above for one document. Jobs live in the `jobs` table: claimed with `FOR UPDATE SKIP LOCKED`, leased, retried with
 exponential backoff, and marked `dead` after the last attempt. The PDF parser runs in a child
 process with a deadline. See `docs/adr/0005-worker.md`.
 
@@ -62,8 +101,8 @@ Set `ANTHROPIC_API_KEY` and the `LANGFUSE_*` variables in `.env` (see `.env.exam
 compose file creates the local admin account and project from them). Without Langfuse keys
 tracing is off; without an API key the worker skips PDFs that need the model.
 
-- **One trace per invoice**, across the ingestion and validation jobs; the trace id is stored
-  in the audit events. IBANs and API keys are masked before anything is sent.
+- **One trace per invoice**: the job, one span per graph node and the model call share a
+  trace, also after the human pause; the trace id is stored in the audit events. IBANs and API keys are masked before anything is sent.
 - **Evaluation** on the 21 golden invoices, also run as a Langfuse experiment on the dataset
   `invoice-golden`:
 

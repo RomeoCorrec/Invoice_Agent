@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 
 from invoice_agent.db import models  # noqa: F401  (registers the tables on Base.metadata)
 from invoice_agent.db.base import Base
+from invoice_agent.db.migration_scope import include_object
 
 config = context.config
 target_metadata = Base.metadata
@@ -30,6 +31,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=_database_url(),
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -40,7 +42,9 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     engine = create_engine(_database_url())
     with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata, include_object=include_object
+        )
         with context.begin_transaction():
             context.run_migrations()
     engine.dispose()

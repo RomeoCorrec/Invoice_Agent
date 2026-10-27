@@ -17,6 +17,13 @@ class DocumentStore(Protocol):
         ...
 
 
+class NoDocumentStore:
+    """For a process that decides on invoices but never reads documents (the review command)."""
+
+    def read(self, name: str, max_bytes: int) -> bytes:
+        raise ExtractionError("this process has no document store")
+
+
 class LocalDocumentStore:
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
