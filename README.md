@@ -26,7 +26,7 @@ Settings come from environment variables (see `.env.example`): `DATABASE_URL`, `
 
 A [LangGraph](https://langchain-ai.github.io/langgraph/) graph runs each invoice, with its
 state checkpointed in Postgres. The model is used only to read PDFs without an embedded XML;
-every other step is deterministic Python, and nothing is decided without a human.
+every other step is deterministic Python, and nothing is posted without a human.
 
 ```mermaid
 ---
@@ -38,15 +38,20 @@ graph TD;
 	__start__([<p>__start__</p>]):::first
 	ingest(ingest)
 	validate(validate)
+	propose_entry(propose_entry)
 	request_approval(request_approval)
 	apply_decision(apply_decision)
+	post_entry(post_entry)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> ingest;
+	apply_decision -.-> __end__;
+	apply_decision -.-> post_entry;
 	ingest -.-> __end__;
 	ingest -.-> validate;
+	propose_entry --> request_approval;
 	request_approval --> apply_decision;
-	validate --> request_approval;
-	apply_decision --> __end__;
+	validate --> propose_entry;
+	post_entry --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
@@ -54,14 +59,21 @@ graph TD;
 
 - `ingest` and `validate` wrap the services of the earlier steps (Factur-X or LLM extraction,
   then VAT, totals, SIREN, IBAN, duplicates, purchase-order matching, injection checks).
-- `request_approval` stops the run with `interrupt`. The reviewer is shown figures and anomaly
-  codes, never the document text. The run waits in the database, across restarts.
+- `propose_entry` builds the accounting entry in plain Python (a charge line per VAT rate, the
+  deductible VAT on 44566, the gross total on the supplier's account). When no sound entry
+  exists (unknown supplier, totals that do not add up...) it says why and the invoice can only
+  be rejected: no account is ever guessed.
+- `request_approval` stops the run with `interrupt`. The reviewer is shown figures, anomaly
+  codes and the entry, never the document text. The run waits in the database, across restarts.
 - `apply_decision` approves or rejects, and records who decided in the audit log.
+- `post_entry` runs only after an approval, with the entry the reviewer saw, through the MCP
+  ledger's idempotent tool (one key per invoice). A refusal fails the invoice with the ledger's
+  code; an outage is retried; a crash between the ledger and the database replays into a
+  single entry.
 - Each node has its own transaction and can be replayed: if the process dies after a node
-  committed and before its checkpoint was written, the run continues without ingesting or
-  validating twice. A provider outage retries the job from the last checkpoint.
-- Proposing the accounting entry, posting it through the MCP ledger, and explaining anomalies
-  come in the next steps ([ADR-0007](docs/adr/0007-agent-graph-and-tools.md),
+  committed and before its checkpoint was written, the run continues without doing it twice.
+- Explaining anomalies with a read-only tool loop comes next
+  ([ADR-0007](docs/adr/0007-agent-graph-and-tools.md),
   [ADR-0009](docs/adr/0009-graph-in-the-worker.md)).
 
 ```bash
@@ -69,6 +81,7 @@ uv run python -m invoice_agent.agent seed                  # demo suppliers and 
 uv run python -m invoice_agent.worker enqueue              # queue the PDFs under DOCUMENT_ROOT
 uv run python -m invoice_agent.worker                      # runs each invoice up to the pause
 uv run python -m invoice_agent.agent pending               # what is waiting for a decision
+uv run python -m invoice_agent.agent show <invoice-id>     # the entry that would be posted
 uv run python -m invoice_agent.agent approve <invoice-id> --by you@example.com
 uv run python -m invoice_agent.agent reject  <invoice-id> --by you@example.com --comment "..."
 ```
