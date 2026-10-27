@@ -119,3 +119,62 @@ def test_results_files_are_valid_json_with_sets_and_decimals(tmp_path: Path) -> 
     path = save_results(Summary("smoke", "claude-haiku-5-5", "p", (result,)), tmp_path)
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved["results"][0]["anomalies"] == ["A", "B"]
+
+
+# --- the explain suite -----------------------------------------------------------------------
+
+
+def test_the_explain_dry_run_shows_its_own_plan_and_worst_case(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["--suite", "explain", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "explain suite: 9 cases, model claude-haiku-5-5" in out
+    assert "cap $2.00" in out
+
+
+def test_the_explain_suite_needs_yes_like_the_others(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["--suite", "explain"]) == 2
+    assert "refusing to call the API without --yes" in capsys.readouterr().err
+
+
+def test_the_explain_worst_case_is_bigger_than_an_extraction_and_small_in_absolute_terms() -> None:
+    from evals.run import worst_case_explain_cost
+
+    assert worst_case_explain_cost("claude-haiku-5-5", 1) > worst_case_cost("claude-haiku-5-5", 1)
+    assert worst_case_explain_cost("claude-haiku-5-5", 9) < Decimal("0.5")
+
+
+def test_an_explain_run_with_a_scripted_model_reports_and_saves(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import re
+
+    from evals.explain_runner import ExplainSummary  # noqa: F401
+    from invoice_agent.agent.explanation import AnomalyExplanation, Explanation
+    from invoice_agent.agent.graph.deps import ExplainConfig
+    from invoice_agent.llm.prompt import load_prompt
+    from tests.fakes import FakeToolProvider
+
+    def reply(user: str) -> Explanation:
+        codes = re.findall(r'"code": "([A-Z_]+)"', user)
+        return Explanation(
+            summary="Résumé.",
+            items=[AnomalyExplanation(code=c, explanation="Explication.") for c in codes],
+        )
+
+    config = ExplainConfig(
+        provider=FakeToolProvider(reply),  # type: ignore[arg-type]
+        prompt=load_prompt("explain_anomalies", 1),
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setattr(run, "RESULTS_DIR", tmp_path / "results")
+    monkeypatch.setattr(run, "build_explain_config", lambda *_a, **_k: config)
+    report = tmp_path / "docs" / "explain.md"
+    code = main(["--suite", "explain", "--yes", "--no-langfuse", "--report", str(report)])
+    out = capsys.readouterr().out
+    assert code == 0 and "Anomaly coverage" in out and "100.0%" in out
+    [saved] = (tmp_path / "results").glob("*explain*.json")
+    payload = json.loads(saved.read_text(encoding="utf-8"))
+    assert payload["suite"] == "explain" and len(payload["results"]) == 9
+    assert report.read_text(encoding="utf-8").startswith("# Evaluation: explain suite")
