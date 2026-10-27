@@ -17,6 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from invoice_agent.agent.graph.deps import AgentDeps
 from invoice_agent.agent.graph.entry_nodes import make_post_entry, make_propose_entry
+from invoice_agent.agent.graph.explain_node import make_explain
 from invoice_agent.agent.graph.nodes import (
     Node,
     make_apply_decision,
@@ -30,6 +31,11 @@ from invoice_agent.domain.invoice_status import InvoiceStatus
 
 def route_after_ingest(state: AgentState) -> str:
     return "validate" if state.get("status") == InvoiceStatus.EXTRACTED.value else END
+
+
+def route_after_validate(state: AgentState) -> str:
+    """Anomalies are explained to the reviewer; a clean invoice goes straight on."""
+    return "explain" if state.get("anomaly_codes") else "propose_entry"
 
 
 def route_after_decision(state: AgentState) -> str:
@@ -63,6 +69,7 @@ def build_graph(
     graph = StateGraph(AgentState)
     graph.add_node("ingest", traced("ingest", make_ingest(deps), deps))
     graph.add_node("validate", traced("validate", make_validate(deps), deps))
+    graph.add_node("explain", traced("explain", make_explain(deps), deps))
     graph.add_node("propose_entry", traced("propose_entry", make_propose_entry(deps), deps))
     graph.add_node(
         "request_approval", traced("request_approval", make_request_approval(deps), deps)
@@ -72,7 +79,8 @@ def build_graph(
 
     graph.add_edge(START, "ingest")
     graph.add_conditional_edges("ingest", route_after_ingest, ["validate", END])
-    graph.add_edge("validate", "propose_entry")
+    graph.add_conditional_edges("validate", route_after_validate, ["explain", "propose_entry"])
+    graph.add_edge("explain", "propose_entry")
     graph.add_edge("propose_entry", "request_approval")
     graph.add_edge("request_approval", "apply_decision")
     graph.add_conditional_edges("apply_decision", route_after_decision, ["post_entry", END])

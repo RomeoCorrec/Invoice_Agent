@@ -137,6 +137,7 @@ def approval_request(
     anomaly_codes: list[str],
     entry: dict[str, Any] | None = None,
     entry_blocked: dict[str, Any] | None = None,
+    explanation: dict[str, Any] | None = None,
 ) -> dict[str, JsonValue]:
     """What a reviewer is shown: figures, anomaly codes and the entry that would be posted,
     never the document text."""
@@ -154,6 +155,7 @@ def approval_request(
         "anomaly_codes": list(anomaly_codes),
         "entry": entry,
         "entry_blocked": entry_blocked,
+        "explanation": explanation,
     }
 
 
@@ -170,6 +172,7 @@ def make_request_approval(deps: AgentDeps) -> Node:
                 state.get("anomaly_codes", []),
                 state.get("entry"),
                 state.get("entry_blocked"),
+                state.get("explanation"),
             )
         )
         decision = ApprovalDecision.model_validate(answer)

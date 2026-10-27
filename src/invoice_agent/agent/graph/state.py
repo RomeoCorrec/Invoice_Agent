@@ -47,6 +47,8 @@ class AgentState(TypedDict, total=False):
     status: str
     """The invoice status after the last node, as a string (JSON-friendly)."""
     anomaly_codes: list[str]
+    explanation: dict[str, Any] | None
+    """What the model wrote about the anomalies (an ``Explanation`` as JSON), for the reviewer."""
     entry: dict[str, Any] | None
     """The proposed entry (an ``EntryProposal`` dumped to JSON), if one could be built."""
     entry_blocked: dict[str, Any] | None
