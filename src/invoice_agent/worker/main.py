@@ -28,7 +28,7 @@ from invoice_agent.ingestion.isolated import read_document_isolated
 from invoice_agent.llm.factory import build_extractor
 from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
-from invoice_agent.worker.handlers import HANDLERS, JobContext, process_job
+from invoice_agent.worker.handlers import HANDLERS, JobContext, on_job_dead, process_job
 from invoice_agent.worker.runner import Worker
 from invoice_agent.worker.store import DocumentStore, LocalDocumentStore
 
@@ -95,6 +95,7 @@ def build_worker(
         context_for=context_for,
         settings=settings.worker,
         tracing=tracing,
+        on_dead=on_job_dead,
     )
 
 

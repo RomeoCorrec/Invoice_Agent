@@ -14,6 +14,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.orm import Session
 
+from invoice_agent.agent.failure import fail_invoice_of_run
 from invoice_agent.agent.graph.run import Graph, start_run
 from invoice_agent.domain.job import Job, PermanentJobError
 from invoice_agent.observability.tracing import Tracing
@@ -62,6 +63,12 @@ def handle_process(job: Job, context: JobContext) -> None:
 
 
 HANDLERS: Mapping[str, Handler] = {PROCESS: handle_process}
+
+
+def on_job_dead(session: Session, job: Job, now: datetime, error: str) -> None:
+    """A document the agent gave up on must not stay half-processed: its invoice fails."""
+    if job.kind == PROCESS:
+        fail_invoice_of_run(session, job.id, now=now, reason=error)
 
 
 def process_job(document: str, *, now: datetime, max_attempts: int = 5) -> Job:
