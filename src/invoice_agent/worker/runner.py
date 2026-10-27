@@ -75,6 +75,10 @@ def describe_error(exc: BaseException) -> str:
     return redacted[:MAX_ERROR_LENGTH]
 
 
+DeadJobHook = Callable[[Session, Job, datetime, str], None]
+"""Called inside the transaction that marks a job dead: ``(session, job, now, error)``."""
+
+
 class Worker:
     def __init__(
         self,
@@ -87,6 +91,7 @@ class Worker:
         clock: Callable[[], datetime] = utc_now,
         rng: Callable[[], float] | None = None,
         tracing: Tracing | None = None,
+        on_dead: DeadJobHook | None = None,
     ) -> None:
         self._factory = factory
         self._worker_id = worker_id
@@ -101,6 +106,7 @@ class Worker:
         )
         self._rng = rng
         self._tracing = tracing or Tracing()
+        self._on_dead = on_dead
         self._stop = threading.Event()
 
     # -- control ------------------------------------------------------------------------
@@ -192,6 +198,23 @@ class Worker:
             return inherited
         return self._tracing.trace_id_for(str(job.id))
 
+    def _run_dead_hook(self, session: Session, job: Job, now: datetime, error: str) -> None:
+        """Run the hook in the transaction that marks the job dead, behind a savepoint: if the
+        hook fails, its own changes are undone and the job still dies."""
+        if self._on_dead is None:
+            return
+        try:
+            with session.begin_nested():
+                self._on_dead(session, job, now, error)
+        except Exception as exc:
+            log_event(
+                logger,
+                "dead_job_hook_failed",
+                level=logging.ERROR,
+                job_id=str(job.id),
+                error=describe_error(exc),
+            )
+
     def _record_failure(
         self, job: Job, error: str, *, permanent: bool, fields: dict[str, Any]
     ) -> None:
@@ -202,6 +225,7 @@ class Worker:
                 repo = JobRepository(session)
                 if permanent or exhausted:
                     repo.die(job.id, self._worker_id, now=now, error=error)
+                    self._run_dead_hook(session, job, now, error)
                     log_event(logger, "job_dead", level=logging.ERROR, error=error, **fields)
                 else:
                     delay = (

@@ -91,9 +91,10 @@ a worker thread has no running event loop.
 
 - The invoice's whole story is one graph, one trace, one run id in the audit log.
 - Nodes are idempotent by construction and by test; new nodes must follow the same rule.
-- Open: when a job exhausts its retries (`dead`), the invoice can stay in an intermediate
-  status. A dead job should move its invoice to `failed` with a reason; this needs a hook in
-  the worker and is the next change in this area.
+- Resolved: when a job dies (retries exhausted or a permanent error), a hook run in the same
+  transaction moves the invoice of its run to `failed`, with the reason and an audit event.
+  A final invoice, or a run that never stored one, is left alone, and a failing hook cannot
+  keep the job alive (it runs behind a savepoint).
 - Open: checkpoints accumulate; pruning finished runs is not done yet.
 - Open: the review command is local. Authentication of the approver belongs to the web step;
   today the approver is whatever name the caller passes, recorded as such.

@@ -18,7 +18,7 @@ from invoice_agent.db.session import make_session_factory, session_scope
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.domain.job import JobStatus
 from invoice_agent.ingestion.isolated import read_document_isolated
-from invoice_agent.worker.handlers import HANDLERS, JobContext, process_job
+from invoice_agent.worker.handlers import HANDLERS, JobContext, on_job_dead, process_job
 from invoice_agent.worker.main import document_names, enqueue_documents, main
 from invoice_agent.worker.runner import Worker
 from invoice_agent.worker.store import LocalDocumentStore
@@ -59,7 +59,11 @@ def extractor() -> LookupExtractor:
 
 
 def worker_for(
-    factory: sessionmaker[Session], store_root: Path, saver: Any, reader: Any = None
+    factory: sessionmaker[Session],
+    store_root: Path,
+    saver: Any,
+    reader: Any = None,
+    on_dead: Any = on_job_dead,
 ) -> Worker:
     kwargs = {"reader": reader} if reader is not None else {}
     graph = agent_graph(
@@ -81,6 +85,7 @@ def worker_for(
         context_for=context_for,
         settings=SETTINGS,
         clock=SteppingClock(T0 + timedelta(hours=1)),
+        on_dead=on_dead,
     )
 
 
