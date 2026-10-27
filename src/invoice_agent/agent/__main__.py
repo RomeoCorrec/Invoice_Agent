@@ -20,7 +20,12 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from invoice_agent.agent.graph.checkpoint import open_checkpointer
-from invoice_agent.agent.graph.run import NoPendingApprovalError, pending_approvals, resume_run
+from invoice_agent.agent.graph.run import (
+    CannotApproveError,
+    NoPendingApprovalError,
+    pending_approvals,
+    resume_run,
+)
 from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.config import ConfigError, load_settings
 from invoice_agent.db.reference_data import load_reference_data
@@ -99,7 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             try:
                 result = resume_run(graph, factory, args.invoice_id, decision)
-            except NoPendingApprovalError as exc:
+            except (NoPendingApprovalError, CannotApproveError) as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
         print(f"{args.invoice_id}: {result.state.get('status')}")

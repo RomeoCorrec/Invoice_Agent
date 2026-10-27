@@ -23,7 +23,7 @@ from invoice_agent.domain.job import Job, JobStatus
 from invoice_agent.worker.handlers import process_job
 from tests.factories import IBAN_KEY, T0
 from tests.integration.reference import load_reference
-from tests.integration.test_agent_graph import lookup_extractor
+from tests.integration.support import lookup_extractor
 from tests.integration.test_worker_end_to_end import worker_for
 from tests.pdfs import INVOICES
 

@@ -15,7 +15,7 @@ from langgraph.types import Command
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph.nodes import REVIEWABLE, STEP_RECEIVE
-from invoice_agent.agent.graph.state import AgentState, ApprovalDecision
+from invoice_agent.agent.graph.state import AgentState, ApprovalDecision, Verdict
 from invoice_agent.db.repositories import AuditEventRepository, InvoiceRepository
 from invoice_agent.db.session import session_scope
 
@@ -24,6 +24,10 @@ Graph = CompiledStateGraph[AgentState, None, AgentState, AgentState]
 
 class NoPendingApprovalError(LookupError):
     """There is nothing to approve: the run is unknown, finished, or not waiting."""
+
+
+class CannotApproveError(ValueError):
+    """An approval was asked for an invoice that has no entry to post."""
 
 
 @dataclass(frozen=True)
@@ -80,8 +84,17 @@ def resume_run(
     """Give the waiting run its human decision. Refuses when no run is waiting."""
     with session_scope(session_factory) as session:
         run_id = run_id_for_invoice(session, invoice_id)
-    if run_id is None or run_status(graph, run_id).awaiting_approval is None:
+    request = run_status(graph, run_id).awaiting_approval if run_id else None
+    if run_id is None or request is None:
         raise NoPendingApprovalError(f"no run is waiting for a decision on invoice {invoice_id}")
+    if decision.verdict is Verdict.APPROVE and request.get("entry") is None:
+        # Refused before the run resumes: approving would leave an approved invoice that can
+        # never be posted, and the answer cannot be taken back once the run has consumed it.
+        blocked = request.get("entry_blocked") or {}
+        raise CannotApproveError(
+            f"invoice {invoice_id} has no entry to post ({blocked.get('reason', 'unknown')}): "
+            "it can only be rejected"
+        )
     graph.invoke(Command(resume=decision.model_dump(mode="json")), _config(run_id))
     return run_status(graph, run_id)
 
