@@ -44,11 +44,19 @@ carries the OpenTelemetry context of its caller so its span stays in the invoice
 
 ### What the model sees and what its text can do
 - It runs **only when the rules found anomalies**; a clean invoice costs no model call.
-- Its input is structured: the figures and the anomalies (code, message, evidence), as JSON
-  between `<case>` tags with any such tag in a value neutralised. The free text of the
-  document (notes, line descriptions) is not given. The system prompt says the case is data
-  and that instructions in it are not to be followed. A test feeds an extraction whose notes
-  hold the sentence aimed at an AI and checks that it never reaches the model.
+- Its input holds **no string from the document**: not the seller's name, the invoice number,
+  the notes or the line descriptions. It is made of numbers (SIREN, amounts, rates), a purchase
+  order reference only when it has the shape of an identifier (no space, so no sentence fits),
+  the anomaly codes, our own messages and the evidence of the rules. The text of a
+  rule is sent only if the rule is on an explicit list of codes whose message was checked to
+  be made of our own words and numbers; three rules quote the document (unknown supplier,
+  duplicate, order not found) and get a fixed text; any other rule, or a message with an
+  unexpected shape, gets a pointer to the evidence; a free-text value in the evidence is
+  withheld. A test fails if a rule exists that is on neither list. The case is JSON between `<case>` tags with any
+  such tag neutralised, and the system prompt says the case is data. An automated review
+  pointed at the names and numbers as an injection channel; removing them leaves a hostile
+  document with no sentence to plant, and a test builds one with a hostile name, number,
+  reference and note.
 - Its output is advice shown to the reviewer, labelled as written by the model. It changes no
   status, no entry and no decision. Items about a code it was not given, and repeated codes,
   are dropped and counted in the audit log, so it cannot invent an anomaly.
@@ -69,8 +77,9 @@ reuses the recorded answer, so the model is asked once.
   no write tool in reach.
 - **Pre-fetch the data instead of a tool loop.** Simpler and cheaper, and it remains the
   fallback if the loop proves not worth its cost; the evaluation will compare the two.
-- **Give the model the raw text of the document.** More context for explanations, but it is
-  the injection surface, and the findings already carry what an explanation needs.
+- **Give the model the raw text, or even the names and numbers.** More context for the
+  wording of an explanation, but it is the injection surface, and the reviewer already sees
+  those next to the explanation.
 - **Fail the job when the explanation fails.** Turns an optional help into a source of dead
   invoices.
 - **A second model as a judge in tests.** Deferred: the first measurements are deterministic
