@@ -25,8 +25,8 @@ Settings come from environment variables (see `.env.example`): `DATABASE_URL`, `
 ## The agent
 
 A [LangGraph](https://langchain-ai.github.io/langgraph/) graph runs each invoice, with its
-state checkpointed in Postgres. The model is used only to read PDFs without an embedded XML;
-every other step is deterministic Python, and nothing is posted without a human.
+state checkpointed in Postgres. The model reads PDFs without an embedded XML and explains
+anomalies; every other step is deterministic Python, and nothing is posted without a human.
 
 ```mermaid
 ---
@@ -38,6 +38,7 @@ graph TD;
 	__start__([<p>__start__</p>]):::first
 	ingest(ingest)
 	validate(validate)
+	explain(explain)
 	propose_entry(propose_entry)
 	request_approval(request_approval)
 	apply_decision(apply_decision)
@@ -46,11 +47,13 @@ graph TD;
 	__start__ --> ingest;
 	apply_decision -.-> __end__;
 	apply_decision -.-> post_entry;
+	explain --> propose_entry;
 	ingest -.-> __end__;
 	ingest -.-> validate;
 	propose_entry --> request_approval;
 	request_approval --> apply_decision;
-	validate --> propose_entry;
+	validate -.-> explain;
+	validate -.-> propose_entry;
 	post_entry --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
@@ -59,12 +62,18 @@ graph TD;
 
 - `ingest` and `validate` wrap the services of the earlier steps (Factur-X or LLM extraction,
   then VAT, totals, SIREN, IBAN, duplicates, purchase-order matching, injection checks).
+- `explain` runs only when the rules found anomalies. The model explains each one to the
+  reviewer in plain French, and may look things up in the ledger through four read-only tools
+  (at most four calls, no write tool in the list). It sees the findings and the figures, never
+  the free text of the document. Its text is advice: it changes no status, no entry and no
+  decision, a code it invents is dropped, and if it cannot answer the run goes on without it.
 - `propose_entry` builds the accounting entry in plain Python (a charge line per VAT rate, the
   deductible VAT on 44566, the gross total on the supplier's account). When no sound entry
   exists (unknown supplier, totals that do not add up...) it says why and the invoice can only
   be rejected: no account is ever guessed.
 - `request_approval` stops the run with `interrupt`. The reviewer is shown figures, anomaly
-  codes and the entry, never the document text. The run waits in the database, across restarts.
+  codes, the explanation and the entry, never the document text. The run waits in the
+  database, across restarts.
 - `apply_decision` approves or rejects, and records who decided in the audit log.
 - `post_entry` runs only after an approval, with the entry the reviewer saw, through the MCP
   ledger's idempotent tool (one key per invoice). A refusal fails the invoice with the ledger's
@@ -72,9 +81,10 @@ graph TD;
   single entry.
 - Each node has its own transaction and can be replayed: if the process dies after a node
   committed and before its checkpoint was written, the run continues without doing it twice.
-- Explaining anomalies with a read-only tool loop comes next
-  ([ADR-0007](docs/adr/0007-agent-graph-and-tools.md),
-  [ADR-0009](docs/adr/0009-graph-in-the-worker.md)).
+- Design: [ADR-0007](docs/adr/0007-agent-graph-and-tools.md),
+  [ADR-0009](docs/adr/0009-graph-in-the-worker.md),
+  [ADR-0010](docs/adr/0010-entry-proposal-and-posting.md),
+  [ADR-0011](docs/adr/0011-explaining-anomalies.md).
 
 ```bash
 uv run python -m invoice_agent.agent seed                  # demo suppliers and purchase orders
