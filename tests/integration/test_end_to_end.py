@@ -21,7 +21,7 @@ from invoice_agent.agent.validation import validate_invoice
 from invoice_agent.config import IngestionLimits
 from invoice_agent.db.repositories import AuditEventRepository, InvoiceRepository
 from invoice_agent.db.session import make_session_factory, session_scope
-from invoice_agent.domain.iban import contains_iban
+from invoice_agent.domain.audit import payload_contains_iban
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from tests.factories import GROUND_TRUTH, IBAN_KEY, T0, golden_extraction
 from tests.fakes import ScriptedExtractor
@@ -113,7 +113,7 @@ def test_each_invoice_has_receive_extract_and_validate_events_without_a_full_iba
 ) -> None:
     for case in processed.values():
         assert [event.step for event in case["events"]] == ["receive", "extract", "validate"]
-        assert not any(contains_iban(json.dumps(event.payload)) for event in case["events"])
+        assert not any(payload_contains_iban(event.payload) for event in case["events"])
 
 
 def test_no_invoice_is_approved_or_posted_by_ingestion_and_checks(

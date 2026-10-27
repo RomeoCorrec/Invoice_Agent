@@ -58,19 +58,23 @@ class AuditEvent(DomainModel):
 
     @model_validator(mode="after")
     def _payload_has_no_full_iban(self) -> Self:
-        if _contains_iban(self.payload):
+        if payload_contains_iban(self.payload):
             raise ValueError("payload must not contain a full IBAN, store the masked form")
         return self
 
 
-def _contains_iban(value: JsonValue, key: str | None = None) -> bool:
+def payload_contains_iban(value: JsonValue, key: str | None = None) -> bool:
+    """True if a payload holds an IBAN anywhere, ignoring identifiers the system generated."""
     match value:
         case str():
             return not is_system_identifier(key, value) and contains_iban(value)
         case list():
-            return any(_contains_iban(item, key) for item in value)
+            return any(payload_contains_iban(item, key) for item in value)
         case dict():
-            return any(_contains_iban(k) or _contains_iban(item, k) for k, item in value.items())
+            return any(
+                payload_contains_iban(k) or payload_contains_iban(item, k)
+                for k, item in value.items()
+            )
         case _:
             return False
 
