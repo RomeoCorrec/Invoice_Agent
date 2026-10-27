@@ -56,6 +56,8 @@ class Settings:
     limits: IngestionLimits
     worker: WorkerSettings = field(default_factory=WorkerSettings)
     llm: LlmSettings = field(default_factory=LlmSettings)
+    ledger_database_url: str | None = field(default=None, repr=False)
+    """Database of the ledger; the agent's own database when not set."""
 
 
 def _positive_int(environ: Mapping[str, str], name: str, default: int) -> int:
@@ -106,6 +108,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     return Settings(
         database_url=database_url,
         iban_hash_key=key.encode(),
+        ledger_database_url=env.get("LEDGER_DATABASE_URL") or None,
         limits=IngestionLimits(
             max_document_bytes=_positive_int(
                 env, "MAX_DOCUMENT_BYTES", defaults.max_document_bytes
