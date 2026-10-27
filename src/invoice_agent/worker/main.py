@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph.build import build_graph
 from invoice_agent.agent.graph.checkpoint import open_checkpointer
-from invoice_agent.agent.graph.deps import AgentDeps
+from invoice_agent.agent.graph.deps import AgentDeps, ExplainConfig
+from invoice_agent.agent.graph.explain_node import build_explain_config
 from invoice_agent.agent.graph.run import Graph
 from invoice_agent.config import ConfigError, Settings, load_settings
 from invoice_agent.db.repositories import JobRepository
@@ -57,6 +58,7 @@ def build_agent_graph(
     extractor: InvoiceExtractor | None,
     saver: BaseCheckpointSaver[Any],
     store: DocumentStore | None = None,
+    explain: ExplainConfig | None = None,
 ) -> Graph:
     """The agent graph wired with the production dependencies (shared by the worker and the CLI).
 
@@ -72,6 +74,7 @@ def build_agent_graph(
             reader=partial(read_document_isolated, timeout_s=settings.worker.job_timeout_s),
             tracing=tracing,
             ledger=ledger_stdio_server(settings.ledger_database_url or settings.database_url),
+            explain=explain,
         ),
         saver,
     )
@@ -85,7 +88,14 @@ def build_worker(
 ) -> Worker:
     engine = make_engine(settings.database_url)
     factory = make_session_factory(engine)
-    graph = build_agent_graph(settings, factory, tracing, extractor, saver)
+    graph = build_agent_graph(
+        settings,
+        factory,
+        tracing,
+        extractor,
+        saver,
+        explain=build_explain_config(settings, tracing),
+    )
 
     def context_for(session: Session, now: datetime) -> JobContext:
         return JobContext(session=session, now=now, tracing=tracing, agent=graph)
