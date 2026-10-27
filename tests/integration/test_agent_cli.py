@@ -160,3 +160,21 @@ def test_an_invoice_validated_without_a_run_is_not_listed(
     out = capsys.readouterr().out
     assert str(legacy.id) not in out
     assert str(ids["INV-01"]) in out and len(out.splitlines()) == 2
+
+
+def test_show_displays_the_entry_that_would_be_posted(
+    waiting: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, ids = waiting
+    assert main(["show", str(ids["INV-01"])]) == 0
+    out = capsys.readouterr().out
+    assert "PM-2026-0457" in out and "anomalies none" in out
+    assert "6064" in out and "44566" in out and "401MERC" in out
+    assert out.count("debit") == 2 and out.count("credit") == 1
+
+
+def test_show_refuses_an_invoice_that_is_not_waiting(
+    waiting: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["show", str(uuid4())]) == 1
+    assert "no run is waiting" in capsys.readouterr().err

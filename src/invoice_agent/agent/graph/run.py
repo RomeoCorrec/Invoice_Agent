@@ -115,3 +115,12 @@ def pending_approvals(graph: Graph, session_factory: sessionmaker[Session]) -> l
         if request is not None:
             requests.append(request)
     return requests
+
+
+def pending_request(
+    graph: Graph, session_factory: sessionmaker[Session], invoice_id: UUID
+) -> dict[str, Any] | None:
+    """What the run of this invoice is asking the reviewer, or ``None`` if it is not waiting."""
+    with session_scope(session_factory) as session:
+        run_id = run_id_for_invoice(session, invoice_id)
+    return run_status(graph, run_id).awaiting_approval if run_id else None
