@@ -63,6 +63,14 @@ def test_the_posted_entry_is_the_one_the_reviewer_was_shown(
     assert [(a, s, str(m)) for a, s, m in lines] == [
         (line["account"], line["side"], line["amount"]) for line in shown["lines"]
     ]
+    # the audit event carries the real key, so it can be matched with the ledger's
+    with session_scope(factory) as session:
+        post = [
+            e
+            for e in AuditEventRepository(session).list_for_invoice(invoice_id)
+            if e.step == "post"
+        ]
+    assert post[0].payload["idempotency_key"] == posting_key(invoice_id)
     # the agent keeps a copy, with the ledger's own id and the posting key
     with session_scope(factory) as session:
         local = JournalEntryRepository(session).get_by_invoice(invoice_id)

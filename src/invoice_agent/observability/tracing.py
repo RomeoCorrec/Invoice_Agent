@@ -14,6 +14,7 @@ from typing import Any
 from langfuse import Langfuse
 from opentelemetry import trace as otel_trace
 
+from invoice_agent.domain.audit import is_system_identifier
 from invoice_agent.domain.iban import redact_ibans
 
 SECRET_PATTERN = re.compile(r"\bsk-(?:ant|lf)-[A-Za-z0-9_\-]{6,}")
@@ -21,12 +22,18 @@ SECRET_PATTERN = re.compile(r"\bsk-(?:ant|lf)-[A-Za-z0-9_\-]{6,}")
 
 def mask(*, data: Any, **_kwargs: Any) -> Any:
     """Remove bank details and API keys from anything about to be sent to Langfuse."""
+    return _mask(data, None)
+
+
+def _mask(data: Any, key: str | None) -> Any:
     if isinstance(data, str):
+        if is_system_identifier(key, data):
+            return data
         return SECRET_PATTERN.sub("[secret redacted]", redact_ibans(data))
     if isinstance(data, Mapping):
-        return {key: mask(data=value) for key, value in data.items()}
+        return {k: _mask(value, k) for k, value in data.items()}
     if isinstance(data, list | tuple):
-        return [mask(data=item) for item in data]
+        return [_mask(item, key) for item in data]
     return data
 
 
