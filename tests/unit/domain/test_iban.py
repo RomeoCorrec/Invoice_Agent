@@ -98,3 +98,13 @@ def test_hex_digest_and_references_are_not_taken_for_ibans() -> None:
     digest = IbanFingerprint.from_iban(IBAN, KEY).digest
     assert not contains_iban(digest)
     assert not contains_iban("Ref. CT-26-1188 du 12/10/2026, commande PO-2026-0105")
+
+
+def test_an_iban_dressed_as_a_uuid_is_still_found() -> None:
+    """The detector must stay strict: identifiers are exempted by where they come from, not
+    by what they look like."""
+    from tests.factories import uuid_shaped_iban
+
+    hidden = uuid_shaped_iban()
+    assert contains_iban(hidden)
+    assert "[IBAN redacted]" in redact_ibans(hidden)

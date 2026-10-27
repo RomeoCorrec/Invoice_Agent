@@ -146,3 +146,17 @@ def golden_extraction(path: Path) -> InvoiceData:
     if iban:
         extraction["iban"] = IbanFingerprint.from_iban(iban, IBAN_KEY)
     return InvoiceData.model_validate(extraction)
+
+
+def uuid_shaped_iban() -> str:
+    """A valid German IBAN written so that the whole string has the layout of a UUID.
+
+    What a hostile document could contain to slip an account number past a detector that
+    ignores identifiers: the IBAN starts after a hyphen inside the string and ends inside it.
+    The bank code starts with 1 and then 9 so that the third group begins with a version
+    digit (1-8) and the fourth with a variant digit (8-9), as a UUID's groups do.
+    """
+    bban = "10009000" + "1234567890"
+    check = 98 - int(bban + "131400") % 97  # "DE00" moved to the end: D=13, E=14
+    iban = f"DE{check:02d}{bban}"
+    return f"aaaaaaaa-{iban[0:4]}-{iban[4:8]}-{iban[8:12]}-{iban[12:22]}ab"

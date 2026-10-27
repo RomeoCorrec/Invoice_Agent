@@ -1,10 +1,11 @@
 """Assemble the graph.
 
-    START -> ingest -> validate -> request_approval -> apply_decision -> END
-                 \\-> END (the document could not be read: the invoice is already `failed`)
+    START -> ingest -> validate -> propose_entry -> request_approval -> apply_decision
+                 \\-> END (unreadable: the invoice is already `failed`)       |
+                                         approved -> post_entry -> END <-----+----> END (rejected)
 
 ``request_approval`` stops the run with ``interrupt``; the checkpointer keeps it in Postgres
-until a decision resumes it.
+until a decision resumes it. Only an approval leads to ``post_entry``.
 """
 
 from typing import Any
@@ -15,6 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from invoice_agent.agent.graph.deps import AgentDeps
+from invoice_agent.agent.graph.entry_nodes import make_post_entry, make_propose_entry
 from invoice_agent.agent.graph.nodes import (
     Node,
     make_apply_decision,
@@ -28,6 +30,11 @@ from invoice_agent.domain.invoice_status import InvoiceStatus
 
 def route_after_ingest(state: AgentState) -> str:
     return "validate" if state.get("status") == InvoiceStatus.EXTRACTED.value else END
+
+
+def route_after_decision(state: AgentState) -> str:
+    """Only an approval leads to posting; a rejection ends the run."""
+    return "post_entry" if state.get("status") == InvoiceStatus.APPROVED.value else END
 
 
 def traced(name: str, node: Node, deps: AgentDeps) -> Node:
@@ -56,14 +63,18 @@ def build_graph(
     graph = StateGraph(AgentState)
     graph.add_node("ingest", traced("ingest", make_ingest(deps), deps))
     graph.add_node("validate", traced("validate", make_validate(deps), deps))
+    graph.add_node("propose_entry", traced("propose_entry", make_propose_entry(deps), deps))
     graph.add_node(
         "request_approval", traced("request_approval", make_request_approval(deps), deps)
     )
     graph.add_node("apply_decision", traced("apply_decision", make_apply_decision(deps), deps))
+    graph.add_node("post_entry", traced("post_entry", make_post_entry(deps), deps))
 
     graph.add_edge(START, "ingest")
     graph.add_conditional_edges("ingest", route_after_ingest, ["validate", END])
-    graph.add_edge("validate", "request_approval")
+    graph.add_edge("validate", "propose_entry")
+    graph.add_edge("propose_entry", "request_approval")
     graph.add_edge("request_approval", "apply_decision")
-    graph.add_edge("apply_decision", END)
+    graph.add_conditional_edges("apply_decision", route_after_decision, ["post_entry", END])
+    graph.add_edge("post_entry", END)
     return graph.compile(checkpointer=checkpointer)

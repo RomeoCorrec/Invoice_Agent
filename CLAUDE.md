@@ -89,6 +89,7 @@ uv run python -m invoice_agent.worker enqueue   # queue the PDFs under DOCUMENT_
 uv run python -m invoice_agent.worker           # run a worker (SIGINT/SIGTERM stop it cleanly)
 uv run python -m invoice_agent.agent seed       # load the demo suppliers and purchase orders
 uv run python -m invoice_agent.agent pending    # invoices waiting for a human decision
+uv run python -m invoice_agent.agent show <invoice-id>    # the entry that would be posted
 uv run python -m invoice_agent.agent approve <invoice-id> --by <name>   # or: reject
 uv run python -m ledger seed                    # load the reference data into the ledger schema
 uv run python -m ledger                         # serve the ledger over stdio (clients start it themselves)

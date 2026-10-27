@@ -19,10 +19,10 @@ from invoice_agent.db.repositories import InvoiceRepository
 from invoice_agent.db.session import make_session_factory, session_scope
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.worker.store import LocalDocumentStore
+from ledger.seed import seed_reference
 from tests.factories import IBAN_KEY
 from tests.integration.reference import load_reference
-from tests.integration.support import agent_graph
-from tests.integration.test_agent_graph import lookup_extractor
+from tests.integration.support import agent_graph, lookup_extractor
 from tests.pdfs import INVOICES
 
 
@@ -36,6 +36,7 @@ def waiting(
         load_reference(session)
     root = tmp_path / "documents"
     root.mkdir()
+    seed_reference(engine)  # the ledger the review command posts to, as a subprocess
     graph = agent_graph(saver, factory, LocalDocumentStore(root), lookup_extractor())
     ids: dict[str, UUID] = {}
     for case in ("INV-01", "INV-12"):
@@ -73,7 +74,7 @@ def test_approve_and_reject_decide_and_then_nothing_is_pending(
     factory, ids = waiting
     assert main(["approve", str(ids["INV-01"]), "--by", "alice@example.com"]) == 0
     assert main(["reject", str(ids["INV-12"]), "--by", "alice@example.com", "--comment", "x"]) == 0
-    assert status(factory, ids["INV-01"]) is InvoiceStatus.APPROVED
+    assert status(factory, ids["INV-01"]) is InvoiceStatus.POSTED
     assert status(factory, ids["INV-12"]) is InvoiceStatus.REJECTED
     capsys.readouterr()
     assert main(["pending"]) == 0
@@ -88,7 +89,7 @@ def test_deciding_twice_or_on_an_unknown_invoice_fails_cleanly(
     assert main(["reject", str(ids["INV-01"]), "--by", "bob"]) == 1
     assert main(["approve", str(uuid4()), "--by", "alice"]) == 1
     assert "no run is waiting" in capsys.readouterr().err
-    assert status(factory, ids["INV-01"]) is InvoiceStatus.APPROVED
+    assert status(factory, ids["INV-01"]) is InvoiceStatus.POSTED
 
 
 def test_an_empty_approver_is_refused_before_anything_happens(
@@ -134,7 +135,7 @@ def test_deciding_needs_no_document_root(waiting: Any, monkeypatch: pytest.Monke
     factory, ids = waiting
     monkeypatch.delenv("DOCUMENT_ROOT")
     assert main(["approve", str(ids["INV-01"]), "--by", "alice"]) == 0
-    assert status(factory, ids["INV-01"]) is InvoiceStatus.APPROVED
+    assert status(factory, ids["INV-01"]) is InvoiceStatus.POSTED
 
 
 def test_an_invoice_validated_without_a_run_is_not_listed(
@@ -159,3 +160,21 @@ def test_an_invoice_validated_without_a_run_is_not_listed(
     out = capsys.readouterr().out
     assert str(legacy.id) not in out
     assert str(ids["INV-01"]) in out and len(out.splitlines()) == 2
+
+
+def test_show_displays_the_entry_that_would_be_posted(
+    waiting: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, ids = waiting
+    assert main(["show", str(ids["INV-01"])]) == 0
+    out = capsys.readouterr().out
+    assert "PM-2026-0457" in out and "anomalies none" in out
+    assert "6064" in out and "44566" in out and "401MERC" in out
+    assert out.count("debit") == 2 and out.count("credit") == 1
+
+
+def test_show_refuses_an_invoice_that_is_not_waiting(
+    waiting: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["show", str(uuid4())]) == 1
+    assert "no run is waiting" in capsys.readouterr().err

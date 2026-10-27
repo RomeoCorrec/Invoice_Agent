@@ -4,12 +4,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from mcp import StdioServerParameters
+from mcp.server.mcpserver import MCPServer
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.config import IngestionLimits
 from invoice_agent.ingestion.extractor import InvoiceExtractor
 from invoice_agent.ingestion.reading import RawDocument, read_document
 from invoice_agent.observability.tracing import Tracing
+from invoice_agent.tools.ledger import CallPolicy
 from invoice_agent.worker.store import DocumentStore
 
 
@@ -28,3 +31,7 @@ class AgentDeps:
     reader: Callable[..., RawDocument] = read_document
     tracing: Tracing = field(default_factory=Tracing)
     clock: Callable[[], datetime] = utc_now
+    ledger: MCPServer | StdioServerParameters | None = None
+    """Where to reach the ledger (a subprocess to start, or a server in the same process).
+    Without it a run can be approved but not posted."""
+    ledger_policy: CallPolicy = field(default_factory=CallPolicy)

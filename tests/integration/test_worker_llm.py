@@ -114,7 +114,7 @@ def test_one_invoice_is_one_trace_through_every_node_of_the_run(
     with session_scope(factory) as session:
         [invoice] = InvoiceRepository(session).list_by_status(InvoiceStatus.VALIDATED)
         events = AuditEventRepository(session).list_for_invoice(invoice.id)
-    assert [event.step for event in events] == ["receive", "extract", "validate"]
+    assert [event.step for event in events] == ["receive", "extract", "validate", "propose"]
     assert {event.payload["trace_id"] for event in events} == trace_ids
 
 

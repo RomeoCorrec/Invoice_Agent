@@ -218,3 +218,20 @@ def test_the_traced_provider_works_with_tracing_disabled() -> None:
         system="s", user="u", schema=ExtractedInvoice, max_tokens=10, name="extract_invoice"
     )
     assert result.parsed.invoice_number
+
+
+def test_identifiers_we_generated_survive_the_mask_under_their_keys_only() -> None:
+    import random
+    import uuid
+
+    rng = random.Random(7)
+    for _ in range(5_000):
+        ident = str(uuid.UUID(int=rng.getrandbits(128), version=4))
+        assert mask(data={"run_id": ident, "metadata": {"trace_id": ident.replace("-", "")}}) == {
+            "run_id": ident,
+            "metadata": {"trace_id": ident.replace("-", "")},
+        }
+    from tests.factories import uuid_shaped_iban
+
+    hidden = uuid_shaped_iban()
+    assert "[IBAN redacted]" in json.dumps(mask(data={"note": hidden}))

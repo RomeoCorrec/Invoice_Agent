@@ -14,7 +14,13 @@ from pydantic import JsonValue
 from sqlalchemy.orm import Session
 
 from invoice_agent.agent.graph.deps import AgentDeps
-from invoice_agent.agent.graph.state import AgentState, ApprovalDecision, Verdict
+from invoice_agent.agent.graph.state import (
+    AgentState,
+    ApprovalDecision,
+    Verdict,
+    invoice_id_of,
+    run_id_of,
+)
 from invoice_agent.agent.ingestion import ingest_document
 from invoice_agent.agent.validation import NotReadyForValidationError, validate_invoice
 from invoice_agent.db.repositories import (
@@ -47,18 +53,10 @@ class StaleApprovalError(RuntimeError):
     """The invoice is no longer in a state a decision can be applied to."""
 
 
-def _run_id(state: AgentState) -> UUID:
-    return UUID(state["run_id"])
-
-
-def _invoice_id(state: AgentState) -> UUID:
-    return UUID(state["invoice_id"])
-
-
 def make_ingest(deps: AgentDeps) -> Node:
     def ingest(state: AgentState) -> dict[str, Any]:
         """Read the document and store it as an invoice (extracted or failed)."""
-        run_id = _run_id(state)
+        run_id = run_id_of(state)
         with session_scope(deps.session_factory) as session:
             events = AuditEventRepository(session).list_for_run(run_id)
             replayed = next((e.invoice_id for e in events if e.step == STEP_RECEIVE), None)
@@ -95,7 +93,7 @@ def make_ingest(deps: AgentDeps) -> Node:
 def make_validate(deps: AgentDeps) -> Node:
     def validate(state: AgentState) -> dict[str, Any]:
         """Run the deterministic checks and match the purchase order."""
-        run_id, invoice_id = _run_id(state), _invoice_id(state)
+        run_id, invoice_id = run_id_of(state), invoice_id_of(state)
         with session_scope(deps.session_factory) as session:
             invoice = InvoiceRepository(session).get(invoice_id)
             if invoice is None:
@@ -134,8 +132,14 @@ def _recorded_anomaly_codes(session: Session, run_id: UUID) -> list[str]:
     raise PermanentJobError("the invoice was validated outside this run")
 
 
-def approval_request(invoice: Invoice, anomaly_codes: list[str]) -> dict[str, JsonValue]:
-    """What a reviewer is shown: figures and anomaly codes, never the document text."""
+def approval_request(
+    invoice: Invoice,
+    anomaly_codes: list[str],
+    entry: dict[str, Any] | None = None,
+    entry_blocked: dict[str, Any] | None = None,
+) -> dict[str, JsonValue]:
+    """What a reviewer is shown: figures, anomaly codes and the entry that would be posted,
+    never the document text."""
     data = invoice.data
     assert data is not None
     return {
@@ -148,6 +152,8 @@ def approval_request(invoice: Invoice, anomaly_codes: list[str]) -> dict[str, Js
         "total_ttc": str(data.total_ttc),
         "status": invoice.status.value,
         "anomaly_codes": list(anomaly_codes),
+        "entry": entry,
+        "entry_blocked": entry_blocked,
     }
 
 
@@ -155,10 +161,17 @@ def make_request_approval(deps: AgentDeps) -> Node:
     def request_approval(state: AgentState) -> dict[str, Any]:
         """Stop the run until a human decides. Only reads: it runs again on resume."""
         with session_scope(deps.session_factory) as session:
-            invoice = InvoiceRepository(session).get(_invoice_id(state))
+            invoice = InvoiceRepository(session).get(invoice_id_of(state))
         if invoice is None:
             raise PermanentJobError("invoice not found")
-        answer = interrupt(approval_request(invoice, state.get("anomaly_codes", [])))
+        answer = interrupt(
+            approval_request(
+                invoice,
+                state.get("anomaly_codes", []),
+                state.get("entry"),
+                state.get("entry_blocked"),
+            )
+        )
         decision = ApprovalDecision.model_validate(answer)
         return {"decision": decision.model_dump(mode="json")}
 
@@ -174,7 +187,7 @@ def make_apply_decision(deps: AgentDeps) -> Node:
             if decision.verdict is Verdict.APPROVE
             else InvoiceStatus.REJECTED
         )
-        invoice_id, now = _invoice_id(state), deps.clock()
+        invoice_id, now = invoice_id_of(state), deps.clock()
         with session_scope(deps.session_factory) as session:
             invoices = InvoiceRepository(session)
             invoice = invoices.get(invoice_id)
@@ -201,7 +214,7 @@ def make_apply_decision(deps: AgentDeps) -> Node:
             AuditEventRepository(session).append(
                 AuditEvent(
                     id=uuid4(),
-                    run_id=_run_id(state),
+                    run_id=run_id_of(state),
                     step=STEP_APPROVAL,
                     actor_type=ActorType.HUMAN,
                     actor_id=decision.approver,

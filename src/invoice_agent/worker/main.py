@@ -28,6 +28,7 @@ from invoice_agent.ingestion.isolated import read_document_isolated
 from invoice_agent.llm.factory import build_extractor
 from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
+from invoice_agent.tools.ledger import ledger_stdio_server
 from invoice_agent.worker.handlers import HANDLERS, JobContext, on_job_dead, process_job
 from invoice_agent.worker.runner import Worker
 from invoice_agent.worker.store import DocumentStore, LocalDocumentStore
@@ -70,6 +71,7 @@ def build_agent_graph(
             limits=settings.limits,
             reader=partial(read_document_isolated, timeout_s=settings.worker.job_timeout_s),
             tracing=tracing,
+            ledger=ledger_stdio_server(settings.ledger_database_url or settings.database_url),
         ),
         saver,
     )

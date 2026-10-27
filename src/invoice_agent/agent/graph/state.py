@@ -6,6 +6,7 @@ stores it in the database, and invoice content is untrusted input.
 
 from enum import StrEnum
 from typing import Annotated, Any, TypedDict
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
@@ -46,5 +47,17 @@ class AgentState(TypedDict, total=False):
     status: str
     """The invoice status after the last node, as a string (JSON-friendly)."""
     anomaly_codes: list[str]
+    entry: dict[str, Any] | None
+    """The proposed entry (an ``EntryProposal`` dumped to JSON), if one could be built."""
+    entry_blocked: dict[str, Any] | None
+    """Why no entry could be built (an ``EntryBlocked`` dumped to JSON)."""
     decision: dict[str, Any]
     """An ``ApprovalDecision`` dumped to JSON."""
+
+
+def run_id_of(state: AgentState) -> UUID:
+    return UUID(state["run_id"])
+
+
+def invoice_id_of(state: AgentState) -> UUID:
+    return UUID(state["invoice_id"])
