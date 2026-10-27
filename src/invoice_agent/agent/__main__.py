@@ -141,6 +141,14 @@ def render_request(request: dict[str, Any]) -> str:
         f"gross {request['total_ttc']} {safe_text(request['currency'], 3)}",
         "anomalies " + (safe_text(", ".join(request["anomaly_codes"]), 200) or "none"),
     ]
+    explanation = request.get("explanation")
+    if explanation:
+        lines.append("explained (written by the model: check it against the figures)")
+        lines.append(f"  {safe_text(explanation['summary'], 500)}")
+        for item in explanation["items"]:
+            lines.append(
+                f"  - {safe_text(item['code'], 40)}: {safe_text(item['explanation'], 600)}"
+            )
     entry, blocked = request.get("entry"), request.get("entry_blocked")
     if entry:
         lines.append(f"entry     {safe_text(entry['journal'], 8)} {entry['entry_date']}")

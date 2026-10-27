@@ -64,7 +64,7 @@ def test_a_clean_invoice_stops_for_a_human_with_a_summary(
     assert set(request) == {
         "invoice_id", "invoice_number", "seller", "currency",
         "total_ht", "total_vat", "total_ttc", "status", "anomaly_codes",
-        "entry", "entry_blocked",
+        "entry", "entry_blocked", "explanation",
     }  # fmt: skip
     # the reviewer sees the entry that would be posted
     assert request["entry_blocked"] is None

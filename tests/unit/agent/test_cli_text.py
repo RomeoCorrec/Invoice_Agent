@@ -71,3 +71,31 @@ def test_a_blocked_entry_is_explained() -> None:
         }
     )
     assert "entry     none: unknown_supplier" in out and "can only be rejected" in out
+
+
+def test_the_model_s_explanation_is_shown_labelled_and_cleaned() -> None:
+    from invoice_agent.agent.__main__ import render_request
+
+    out = render_request(
+        {
+            "invoice_id": "id",
+            "status": "needs_review",
+            "invoice_number": "N",
+            "seller": "S",
+            "currency": "EUR",
+            "total_ht": "1.00",
+            "total_vat": "0.20",
+            "total_ttc": "1.20",
+            "anomaly_codes": ["VAT_AMOUNT_MISMATCH"],
+            "entry": None,
+            "entry_blocked": None,
+            "explanation": {
+                "summary": "Look at the VAT.\x1b[2J",
+                "items": [{"code": "VAT_AMOUNT_MISMATCH", "explanation": "x\rFAKE\nLINE"}],
+            },
+        }
+    )
+    assert "written by the model" in out
+    assert "VAT_AMOUNT_MISMATCH: x" in out
+    assert "\x1b" not in out and "\r" not in out
+    assert not any(line.strip() == "LINE" for line in out.splitlines())

@@ -235,3 +235,36 @@ def test_identifiers_we_generated_survive_the_mask_under_their_keys_only() -> No
 
     hidden = uuid_shaped_iban()
     assert "[IBAN redacted]" in json.dumps(mask(data={"note": hidden}))
+
+
+def test_a_conversation_is_one_generation_with_a_span_per_tool_call(
+    traced: tuple[Tracing, InMemorySpanExporter],
+) -> None:
+    from pydantic import BaseModel
+
+    from invoice_agent.llm.tools import ToolSpec
+    from tests.fakes import FakeToolProvider
+
+    class Reply(BaseModel):
+        text: str
+
+    tracing, exporter = traced
+    tool = ToolSpec("lookup", "Look up.", {"type": "object"}, lambda args: f"found {args['key']}")
+    provider = TracedProvider(
+        FakeToolProvider(Reply(text="done"), plan=[("lookup", {"key": f"pay {IBAN}"})]),
+        tracing,
+        prompt_label="explain.v1@test",
+    )
+    result = provider.converse(
+        system="s", user="u", schema=Reply, tools=[tool], max_tokens=100, name="explain"
+    )
+    assert [c.name for c in result.tool_calls] == ["lookup"]
+
+    recorded = spans(tracing, exporter)
+    generation, call = recorded["explain"], recorded["tool.lookup"]
+    assert generation.attributes is not None and call.attributes is not None
+    assert generation.attributes["langfuse.observation.type"] == "generation"
+    assert call.attributes["langfuse.observation.type"] == "tool"
+    assert call.parent is not None and call.parent.span_id == generation.context.span_id
+    assert "lookup" in str(generation.attributes["langfuse.observation.metadata.tool_calls"])
+    assert IBAN not in json.dumps(dict(call.attributes))  # the tool's input is masked too

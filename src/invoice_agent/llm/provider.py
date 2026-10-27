@@ -5,11 +5,14 @@ tracking are applied in one place. Providers raise one of two errors, and the ca
 decides from the type alone whether to try again.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
 from pydantic import BaseModel
+
+from invoice_agent.llm.tools import ToolCall, ToolSpec
 
 
 class LlmError(Exception):
@@ -41,6 +44,8 @@ class LlmResult[T: BaseModel]:
     latency_s: float
     request_id: str | None
     stop_reason: str
+    tool_calls: tuple[ToolCall, ...] = ()
+    """The tools the model called, in order (empty for a single call)."""
 
 
 class LlmProvider(Protocol):
@@ -51,4 +56,28 @@ class LlmProvider(Protocol):
         self, *, system: str, user: str, schema: type[T], max_tokens: int, name: str
     ) -> LlmResult[T]:
         """One call returning ``schema``, validated. ``name`` labels the call in traces."""
+        ...
+
+
+class ToolProvider(LlmProvider, Protocol):
+    """A provider that can let the model call tools before it answers."""
+
+    def converse[T: BaseModel](
+        self,
+        *,
+        system: str,
+        user: str,
+        schema: type[T],
+        tools: Sequence[ToolSpec],
+        max_tokens: int,
+        name: str,
+        max_tool_calls: int = 4,
+        max_turns: int = 5,
+    ) -> LlmResult[T]:
+        """A conversation in which the model may call ``tools``, then answers with ``schema``.
+
+        Bounded on purpose: at most ``max_tool_calls`` calls and ``max_turns`` requests. When a
+        bound is reached the model is told to answer with what it has. ``usage`` and
+        ``cost_usd`` cover every request of the conversation.
+        """
         ...
