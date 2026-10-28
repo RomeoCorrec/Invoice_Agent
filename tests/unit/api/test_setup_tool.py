@@ -48,3 +48,13 @@ def _hash() -> str:
     from invoice_agent.api.auth import hash_password
 
     return hash_password("x")
+
+
+def test_the_tool_says_what_it_waits_for_when_the_input_is_not_a_terminal(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("sys.stdin", io.StringIO("a long enough password\n"))
+    assert main(["hash-password"]) == 0
+    captured = capsys.readouterr()
+    assert "Reading the password from standard input" in captured.err
+    assert "a long enough password" not in captured.out + captured.err
