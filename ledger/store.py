@@ -150,6 +150,13 @@ class LedgerStore:
                 )
         except IntegrityError as exc:
             if "uq_entries_invoice" in str(exc.orig):
+                # Two requests with the same key race on two unique indexes. If the other one
+                # tripped the invoice index first, this is still the same request: replay it.
+                # Only another key for the same invoice is a second booking.
+                with self._engine.begin() as connection:
+                    twin = self._find_by_key(connection, request.idempotency_key)
+                if twin is not None:
+                    return self._replay(request, twin, fingerprint)
                 raise LedgerRefusal(
                     ErrorCode.INVOICE_ALREADY_BOOKED,
                     f"invoice {request.invoice_number!r} of this supplier already has an entry",

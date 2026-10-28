@@ -163,3 +163,57 @@ def test_concurrent_posts_with_one_key_write_once(store: LedgerStore, engine: En
     assert len({r.entry_id for r in results}) == 1
     assert sum(not r.replayed for r in results) == 1
     assert count(engine, tables.entries) == 1 and count(engine, tables.entry_lines) == 3
+
+
+def test_concurrent_posts_never_refuse_the_same_request_as_already_booked(
+    store: LedgerStore, engine: Engine
+) -> None:
+    """Twins of one request race on two unique indexes (key, invoice): all must replay.
+
+    Which index trips first depends on timing, so the race is repeated with a new invoice each
+    round. A retried post whose twin is still in flight is the same request, not a second
+    entry for the same invoice.
+    """
+    rounds = 40
+    for number in range(rounds):
+        entry = request(f"post:race-{number}", invoice_number=f"RACE-{number:03d}")
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(lambda _, e=entry: store.post_entry(e), range(8)))
+        assert len({r.entry_id for r in results}) == 1
+        assert sum(not r.replayed for r in results) == 1
+    assert count(engine, tables.entries) == rounds
+
+
+def test_a_different_request_for_a_booked_invoice_is_still_refused(store: LedgerStore) -> None:
+    store.post_entry(request("post:first"))
+    with pytest.raises(LedgerRefusal) as refusal:
+        store.post_entry(request("post:second"))  # another key, same invoice: a second booking
+    assert refusal.value.code is ErrorCode.INVOICE_ALREADY_BOOKED
+
+
+def test_a_twin_that_won_the_invoice_index_first_is_replayed_not_refused(
+    store: LedgerStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The losing side of the race, made deterministic.
+
+    The entry of the invoice exists (the winner committed) but the loser's first read of its key
+    saw nothing; its insert then trips the invoice index. It must read the key again and replay.
+    """
+    from uuid import uuid4
+
+    from ledger.store import request_fingerprint
+
+    winner = store.post_entry(request("post:twin"))
+    twin_request = request("post:twin")
+    reads = {"n": 0}
+
+    def late_reader(_connection: object, _key: str) -> tuple[object, str] | None:
+        reads["n"] += 1
+        if reads["n"] == 1:
+            return None  # the read before the winner's commit was visible
+        return winner.entry_id, request_fingerprint(twin_request)
+
+    monkeypatch.setattr(LedgerStore, "_find_by_key", staticmethod(late_reader))
+    # A key the table has not seen, so that only the invoice index can object to the insert.
+    posted = store.post_entry(request(f"post:{uuid4()}"))
+    assert posted.replayed and posted.entry_id == winner.entry_id and reads["n"] == 2
