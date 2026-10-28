@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ invoice.invoice_number | clean(40) }}{% endblock %}
+{% block content %}
+<p><a href="/">← Waiting for a decision</a></p>
+<h1>Invoice {{ invoice.invoice_number | clean(40) }}</h1>
+
+<dl class="facts">
+  <dt>Supplier</dt><dd>{{ invoice.seller | clean(80) }}</dd>
+  <dt>Net</dt><dd>{{ invoice.total_ht | clean(20) }} {{ invoice.currency | clean(3) }}</dd>
+  <dt>VAT</dt><dd>{{ invoice.total_vat | clean(20) }} {{ invoice.currency | clean(3) }}</dd>
+  <dt>Gross</dt><dd>{{ invoice.total_ttc | clean(20) }} {{ invoice.currency | clean(3) }}</dd>
+  <dt>Status</dt><dd><span class="badge {{ 'review' if invoice.status == 'needs_review' else 'clean' }}">{{ invoice.status | clean(20) }}</span></dd>
+</dl>
+
+<h2>Anomalies</h2>
+{% if invoice.anomaly_codes %}
+<ul class="anomalies">
+  {% for code in invoice.anomaly_codes %}
+  <li><span class="code">{{ code | clean(40) }}</span> {{ anomaly_labels.get(code, '') }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">The rules found nothing.</p>
+{% endif %}
+
+{% if invoice.explanation %}
+<h2>Explanation</h2>
+<p class="muted">Written by the model: check it against the figures above.</p>
+<div class="explanation" lang="fr">
+  <p>{{ invoice.explanation.summary | clean(600) }}</p>
+  <ul>
+    {% for item in invoice.explanation['items'] %}
+    <li><span class="code">{{ item.code | clean(40) }}</span> {{ item.explanation | clean(700) }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>Entry that would be posted</h2>
+{% if invoice.entry %}
+<table>
+  <thead>
+    <tr><th scope="col">Account</th><th scope="col">Side</th><th scope="col" class="num">Amount</th><th scope="col">Label</th></tr>
+  </thead>
+  <tbody>
+    {% for line in invoice.entry['lines'] %}
+    <tr>
+      <td>{{ line.account | clean(12) }}</td>
+      <td>{{ line.side | clean(8) }}</td>
+      <td class="num">{{ line.amount | clean(20) }}</td>
+      <td>{{ line.label | clean(120) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="muted">Journal {{ invoice.entry['journal'] | clean(8) }}, dated {{ invoice.entry.entry_date | clean(10) }}.</p>
+{% else %}
+<p class="warning">
+  No entry can be proposed
+  ({{ invoice.entry_blocked.reason | clean(40) if invoice.entry_blocked else 'unknown' }}):
+  {{ invoice.entry_blocked.detail | clean(200) if invoice.entry_blocked else '' }}.
+  This invoice can only be rejected.
+</p>
+{% endif %}
+
+<h2>Decision</h2>
+<form method="post" action="/invoices/{{ invoice.invoice_id }}/decision" class="decision">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="comment">Comment (optional)</label>
+  <textarea id="comment" name="comment" rows="3" maxlength="1000"></textarea>
+  <div class="actions">
+    {% if invoice.entry %}<button type="submit" name="verdict" value="approve" class="approve">Approve and post</button>{% endif %}
+    <button type="submit" name="verdict" value="reject" class="reject">Reject</button>
+  </div>
+</form>
+{% endblock %}
