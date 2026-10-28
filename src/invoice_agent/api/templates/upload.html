@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Processing an invoice{% endblock %}
+{% block head %}{% if not progress.finished %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
+{% block content %}
+<p><a href="/">← Waiting for a decision</a></p>
+<h1>Processing the invoice</h1>
+{% include "_progress.html" %}
+{% endblock %}

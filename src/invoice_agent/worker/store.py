@@ -7,13 +7,22 @@ store will implement the same protocol on AWS.
 
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
 from invoice_agent.ingestion.document import ExtractionError
+
+UPLOAD_DIRECTORY = "uploads"
 
 
 class DocumentStore(Protocol):
     def read(self, name: str, max_bytes: int) -> bytes:
         """The bytes of document ``name``; ExtractionError if it is missing or too large."""
+        ...
+
+
+class UploadStore(DocumentStore, Protocol):
+    def save(self, content: bytes) -> str:
+        """Store a new document under a name chosen by the store, and return that name."""
         ...
 
 
@@ -49,3 +58,12 @@ class LocalDocumentStore:
         if not candidate.is_relative_to(self._root) or candidate == self._root:
             raise ExtractionError("document name is outside the store")
         return candidate
+
+    def save(self, content: bytes) -> str:
+        """Write under ``uploads/`` with a generated name: nothing the client sent is used."""
+        name = f"{UPLOAD_DIRECTORY}/{uuid4()}.pdf"
+        path = self._resolve(name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("xb") as handle:  # exclusive: never overwrites
+            handle.write(content)
+        return name

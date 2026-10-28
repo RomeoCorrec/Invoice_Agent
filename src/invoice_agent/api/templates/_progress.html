@@ -1,0 +1,20 @@
+<div id="progress" class="progress" role="status" aria-live="polite"{% if not progress.finished %} hx-get="/uploads/{{ job_id }}/progress" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+  <ol class="stages">
+    {% for stage in progress.stages %}
+    <li class="stage {{ stage.state.value }}">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="label">{{ stage.label }}</span>
+      <span class="sr-only">({{ stage.state.value }})</span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% if progress.failed %}
+  <p class="warning">The processing failed: {{ progress.error | clean(160) if progress.error else 'unknown error' }}.</p>
+  {% elif progress.stalled %}
+  <p class="warning">No worker has picked this up yet. Is <code>python -m invoice_agent.worker</code> running?</p>
+  {% elif progress.finished and progress.invoice_id and not progress.decided %}
+  <p class="notice">Done. <a href="/invoices/{{ progress.invoice_id }}">Review the invoice and decide</a>.</p>
+  {% elif progress.finished %}
+  <p class="muted">This invoice was already decided. <a href="/">Back to the queue</a>.</p>
+  {% endif %}
+</div>
