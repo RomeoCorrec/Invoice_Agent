@@ -203,3 +203,21 @@ def test_the_reports_show_the_metrics_and_what_the_model_wrote(
     markdown = render_markdown(summary, date="2026-10-27")
     assert markdown.startswith("# Evaluation: explain suite")
     assert "## What the model wrote" in markdown and "À vérifier avec le fournisseur." in markdown
+
+
+def test_a_run_keeps_what_is_needed_to_score_it_again_offline(
+    cases: list[EvalCase], reference: Reference
+) -> None:
+    from evals.explain_metrics import ungrounded_figures
+
+    summary = evaluate(
+        cases[:1],
+        reference,
+        lambda user: faithful(user, text="La TVA correcte serait de 91,23 €."),
+        plan=[("get_supplier", {"siren": "151757747"})],
+    )
+    [result] = summary.results
+    assert "91,23" in result.body and len(result.sources) == 2
+    assert result.sources[0].startswith("<case>") and "SUP-001" in result.sources[1]
+    # the stored texts are enough to compute the figures check again
+    assert tuple(ungrounded_figures(result.body, result.sources)) == result.ungrounded == ("91,23",)

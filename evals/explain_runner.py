@@ -67,6 +67,10 @@ class ExplainResult:
     injection_ok: bool | None = None
     summary: str = ""
     items: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    body: str = ""
+    """Everything the model wrote, before the unknown codes were dropped (for scoring again)."""
+    sources: tuple[str, ...] = ()
+    """The case file and the tool results the figures were checked against."""
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
@@ -139,6 +143,8 @@ def run_explain_case(
         ),
         summary=checked.explanation.summary,
         items=tuple((item.code, item.explanation) for item in checked.explanation.items),
+        body=body,
+        sources=(case_text, *outputs),
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
         cost_usd=float(result.cost_usd),
