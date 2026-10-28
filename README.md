@@ -121,6 +121,15 @@ decision, document text escaped and cleaned, a strict Content-Security-Policy wi
 script. See [ADR-0012](docs/adr/0012-web-approval-interface.md) for the choices and their
 limits (put TLS in front of it outside localhost).
 
+### Submitting an invoice
+
+The queue page has an upload form. A PDF goes into the document store under a generated name
+and a `process` job is queued; the page then shows the run moving through its stages (in the
+queue, reading, checks, explanation when there are anomalies, entry, ready for a decision),
+read from the audit events of the run rather than animated on a timer. A worker must run next
+to the server (`uv run python -m invoice_agent.worker`) with the same `DOCUMENT_ROOT`. See
+[ADR-0013](docs/adr/0013-upload-and-progress.md).
+
 ## Running the worker
 
 ```bash
