@@ -11,7 +11,9 @@ from decimal import Decimal, InvalidOperation
 from itertools import combinations
 
 NUMBER = re.compile(r"\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?")
+# "avant de valider la facture" is the advice to check first, not an instruction to validate it.
 DIRECTIVE = re.compile(
+    r"(?<!avant de\s)(?<!avant d['\u2019])"
     r"\b(?:approuv\w*|valid(?:er|ez)\s+(?:la|cette)\s+facture|pay(?:er|ez)|rejet\w*|refus(?:er|ez))",
     re.IGNORECASE,
 )

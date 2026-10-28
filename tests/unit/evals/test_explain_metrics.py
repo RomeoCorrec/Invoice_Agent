@@ -103,3 +103,15 @@ def test_a_figure_that_is_neither_in_the_case_nor_a_gap_or_a_sum_is_still_caught
     case = '{"declared_vat": "96.80", "expected_vat": "88.00"}'
     assert ungrounded_figures("La TVA correcte serait de 91,23 €.", [case]) == ["91,23"]
     assert ungrounded_figures("Le montant réel est 12 345,67 €.", [case]) == ["12 345,67"]
+
+
+def test_advice_to_check_before_validating_is_not_a_directive() -> None:
+    """The model's own sentence (INV-13): it says to verify first, it does not say to validate."""
+    advice = "Il faut vérifier le total TTC sur le document original, avant de valider la facture."
+    assert directives(advice) == []
+    assert directives("Vérifiez avant d'approuver cette facture.") == []
+    assert directives("Vérifiez, puis approuver cette facture.") == ["approuver"]
+    assert directives("Il faut valider la facture.") == ["valider la facture"]
+    assert directives("Avant de valider la facture, puis validez cette facture.") == [
+        "validez cette facture"
+    ]
