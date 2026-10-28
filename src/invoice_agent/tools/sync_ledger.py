@@ -65,9 +65,23 @@ class SyncLedgerReader:
     ) -> None:
         self._stop()
 
+    def _post(self, item: Any) -> bool:
+        """Hand an item to the session task. False if the session has already ended.
+
+        When the ledger fails to start, the session task ends, and ``asyncio.run`` closes its
+        loop, possibly before the caller learns of the failure: a closed loop is not an error
+        here, it only means there is nobody left to tell.
+        """
+        if self._loop is None or self._queue is None or self._loop.is_closed():
+            return False
+        try:
+            self._loop.call_soon_threadsafe(self._queue.put_nowait, item)
+        except RuntimeError:  # the loop closed between the check and the call
+            return False
+        return True
+
     def _stop(self) -> None:
-        if self._loop is not None and self._queue is not None:
-            self._loop.call_soon_threadsafe(self._queue.put_nowait, None)
+        self._post(None)
         if self._thread is not None:
             self._thread.join(timeout=JOIN_TIMEOUT_S)
 
@@ -103,9 +117,8 @@ class SyncLedgerReader:
             raise ToolTransientError("the ledger session is not open")
         future: Future[Any] = Future()
         context = otel_context.get_current()
-        self._loop.call_soon_threadsafe(
-            self._queue.put_nowait, (method, arguments, context, future)
-        )
+        if not self._post((method, arguments, context, future)):
+            raise ToolTransientError("the ledger session has ended")
         # A call may be retried by the client: allow every attempt, plus some slack.
         budget = self._policy.call_timeout_s * self._policy.attempts + 10
         try:

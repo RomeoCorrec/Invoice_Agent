@@ -56,6 +56,40 @@ def test_a_ledger_that_cannot_start_fails_the_scope_without_hanging() -> None:
     assert reader_threads() == []
 
 
+def test_a_start_failure_seen_after_the_session_loop_closed_is_still_the_start_error() -> None:
+    """The race behind an intermittent CI failure, made deterministic.
+
+    The ledger fails to start, the session task ends and its loop is closed; only then does the
+    caller wake up and stop the reader. That must not raise 'Event loop is closed'.
+    """
+    from concurrent.futures import Future
+
+    broken = StdioServerParameters(command=sys.executable, args=["-c", "import sys; sys.exit(3)"])
+    reader = SyncLedgerReader(
+        broken, policy=CallPolicy(attempts=1, connect_timeout_s=10, call_timeout_s=5)
+    )
+
+    class WakesAfterTheThreadEnded(Future[None]):
+        def result(self, timeout: float | None = None) -> None:
+            assert reader._thread is not None
+            reader._thread.join()  # the loop is closed by the time the caller looks
+            return super().result(timeout)
+
+    reader._ready = WakesAfterTheThreadEnded()
+    with pytest.raises(ToolTransientError):
+        reader.__enter__()
+    assert reader._loop is not None and reader._loop.is_closed()
+    assert reader_threads() == []
+
+
+def test_a_call_after_the_session_ended_is_a_transient_error(ledger_server: MCPServer) -> None:
+    reader = SyncLedgerReader(ledger_server)
+    with reader:
+        pass
+    with pytest.raises(ToolTransientError, match="ended"):
+        reader.get_supplier(siren="151757747")
+
+
 @pytest.fixture
 def traced() -> Iterator[tuple[Tracing, InMemorySpanExporter]]:
     exporter = InMemorySpanExporter()
