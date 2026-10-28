@@ -25,6 +25,7 @@ from invoice_agent.db.session import session_scope
 from invoice_agent.domain.audit import ActorType
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from invoice_agent.llm.prompt import load_prompt
+from invoice_agent.worker.store import LocalDocumentStore
 from ledger import tables
 from tests.fakes import FakeToolProvider
 from tests.integration.support import document, graph_for, start, status_of
@@ -77,10 +78,14 @@ def waiting(
 
 @pytest.fixture
 def client(
-    config: WebConfig, waiting: tuple[Graph, dict[str, UUID]], factory: sessionmaker[Session]
+    config: WebConfig,
+    waiting: tuple[Graph, dict[str, UUID]],
+    factory: sessionmaker[Session],
+    documents: Path,
 ) -> Iterator[TestClient]:
     graph, _ = waiting
-    with TestClient(web.create_app(config, graph, factory), follow_redirects=False) as c:
+    app = web.create_app(config, graph, factory, documents=LocalDocumentStore(documents))
+    with TestClient(app, follow_redirects=False) as c:
         yield c
 
 
@@ -172,7 +177,10 @@ def test_pages_load_nothing_external_and_run_no_inline_code(
 ) -> None:
     for path in ("/", f"/invoices/{ids(waiting)['INV-12']}"):
         body = client.get(path, auth=ALICE).text
-        assert "<script" not in body and " style=" not in body and "<style" not in body
+        # the only script is the vendored htmx, from our own origin, with no code in the page
+        assert re.findall(r"<script[^>]*>", body) == ['<script src="/static/htmx.min.js" defer>']
+        assert "defer></script>" in body and " style=" not in body  # the tag is empty
+        assert "<style" not in body and not re.search(r" on\w+=", body)
         assert not re.search(r'(?:src|href)="https?://', body)
 
 
@@ -381,3 +389,113 @@ def test_a_verdict_other_than_approve_or_reject_is_refused(
     invoice = ids(waiting)["INV-01"]
     assert decide(client, invoice, "maybe").status_code == 422
     assert status_of(factory, str(invoice)) is InvoiceStatus.VALIDATED
+
+
+# --- the document next to the invoice ----------------------------------------------------------
+
+
+def test_the_page_of_an_invoice_shows_its_document_in_a_frame(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]]
+) -> None:
+    invoice = ids(waiting)["INV-12"]
+    page = client.get(f"/invoices/{invoice}", auth=ALICE).text
+    assert f'<iframe src="/invoices/{invoice}/document"' in page
+    assert (
+        "frame-src 'self'"
+        in client.get(f"/invoices/{invoice}", auth=ALICE).headers["content-security-policy"]
+    )
+
+
+def test_the_document_is_the_stored_pdf_served_with_strict_headers(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    response = client.get(f"/invoices/{ids(waiting)['INV-12']}/document", auth=ALICE)
+    assert response.status_code == 200
+    assert response.content == (documents / document(documents, "INV-12")).read_bytes()
+    headers = response.headers
+    assert headers["content-type"] == "application/pdf"
+    assert headers["x-content-type-options"] == "nosniff" and headers["cache-control"] == "no-store"
+    assert headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'self'"
+    assert headers["x-frame-options"] == "SAMEORIGIN"
+    assert headers["content-disposition"].startswith("inline")
+
+
+def test_the_document_needs_a_login(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]]
+) -> None:
+    assert client.get(f"/invoices/{ids(waiting)['INV-12']}/document").status_code == 401
+
+
+@pytest.mark.parametrize("path", ["not-a-uuid", str(uuid4()), "../../etc/passwd"])
+def test_an_unknown_or_malformed_invoice_has_no_document(client: TestClient, path: str) -> None:
+    response = client.get(f"/invoices/{path}/document", auth=ALICE)
+    assert response.status_code in (404, 422) and b"%PDF" not in response.content
+
+
+def test_the_document_name_comes_from_the_database_not_from_the_request(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], factory: sessionmaker[Session]
+) -> None:
+    invoice = ids(waiting)["INV-12"]
+    with session_scope(factory) as session:
+        session.execute(
+            text("UPDATE invoices SET source_uri = :uri WHERE id = :id"),
+            {"uri": "../../outside.pdf", "id": invoice},
+        )
+    response = client.get(f"/invoices/{invoice}/document", auth=ALICE)
+    assert response.status_code == 404 and b"%PDF" not in response.content
+
+
+def test_a_stored_file_that_is_not_a_pdf_is_not_served(
+    config: WebConfig,
+    waiting: tuple[Graph, dict[str, UUID]],
+    factory: sessionmaker[Session],
+    tmp_path: Path,
+) -> None:
+    graph, found = waiting
+    (tmp_path / "x.pdf").write_bytes(b"<html><script>alert(1)</script></html>")
+    invoice = found["INV-12"]
+    with session_scope(factory) as session:
+        session.execute(
+            text("UPDATE invoices SET source_uri = 'x.pdf' WHERE id = :id"), {"id": invoice}
+        )
+    app = web.create_app(config, graph, factory, documents=LocalDocumentStore(tmp_path))
+    with TestClient(app) as c:
+        response = c.get(f"/invoices/{invoice}/document", auth=ALICE)
+    assert response.status_code == 404 and b"alert(1)" not in response.content
+
+
+def test_without_a_document_store_the_page_says_so_and_no_document_is_served(
+    config: WebConfig, waiting: tuple[Graph, dict[str, UUID]], factory: sessionmaker[Session]
+) -> None:
+    graph, found = waiting
+    with TestClient(web.create_app(config, graph, factory)) as c:
+        page = c.get(f"/invoices/{found['INV-12']}", auth=ALICE).text
+        assert "<iframe" not in page and "DOCUMENT_ROOT" in page
+        assert c.get(f"/invoices/{found['INV-12']}/document", auth=ALICE).status_code == 404
+
+
+# --- the queue refreshes itself ----------------------------------------------------------------
+
+
+def test_the_queue_page_asks_for_its_own_refresh_and_works_without_javascript(
+    client: TestClient,
+) -> None:
+    page = client.get("/", auth=ALICE).text
+    assert 'hx-get="/fragments/queue"' in page and 'hx-trigger="every 5s"' in page
+    assert '<meta http-equiv="refresh"' in page  # inside <noscript>
+    assert "PM-2026-0457" in page  # the table is in the page itself, not loaded afterwards
+
+
+def test_the_fragment_is_the_table_alone_and_needs_a_login(client: TestClient) -> None:
+    assert client.get("/fragments/queue").status_code == 401
+    fragment = client.get("/fragments/queue", auth=ALICE).text
+    assert "PM-2026-0457" in fragment and "<html" not in fragment and "Signed in" not in fragment
+
+
+def test_a_decided_invoice_leaves_the_refreshed_queue(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]]
+) -> None:
+    invoice = ids(waiting)["INV-01"]
+    assert "PM-2026-0457" in client.get("/fragments/queue", auth=ALICE).text
+    assert decide(client, invoice, "reject").status_code == 303
+    assert "PM-2026-0457" not in client.get("/fragments/queue", auth=ALICE).text

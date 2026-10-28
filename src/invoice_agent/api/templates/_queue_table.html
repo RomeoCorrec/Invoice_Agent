@@ -1,0 +1,28 @@
+{% if requests %}
+<table>
+  <thead>
+    <tr>
+      <th scope="col">Invoice</th>
+      <th scope="col">Supplier</th>
+      <th scope="col" class="num">Gross</th>
+      <th scope="col">Status</th>
+      <th scope="col">Anomalies</th>
+      <th scope="col">Entry</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in requests %}
+    <tr>
+      <td><a href="/invoices/{{ r.invoice_id }}">{{ r.invoice_number | clean(40) }}</a></td>
+      <td>{{ r.seller | clean(40) }}</td>
+      <td class="num">{{ r.total_ttc | clean(20) }} {{ r.currency | clean(3) }}</td>
+      <td><span class="badge {{ 'review' if r.status == 'needs_review' else 'clean' }}">{{ r.status | clean(20) }}</span></td>
+      <td>{% for code in r.anomaly_codes %}<span class="code">{{ code | clean(40) }}</span> {% else %}none{% endfor %}</td>
+      <td>{% if r.entry %}ready{% else %}<span class="muted">none</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nothing is waiting for a decision.</p>
+{% endif %}
