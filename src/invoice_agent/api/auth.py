@@ -34,19 +34,37 @@ def _unb64(text: str) -> bytes:
 
 
 def hash_password(password: str, *, salt: bytes | None = None) -> str:
-    """``scrypt$N$r$p$salt$hash``: everything needed to check the password later."""
+    """``scrypt:N:r:p:salt:hash``: everything needed to check the password later.
+
+    The separator is a colon, not a dollar sign: the hash lives in a ``.env`` file, and the
+    readers of those files (uv, docker compose, dotenv libraries) expand ``$16384`` or ``$8``
+    as variables and silently empty them.
+    """
     salt = salt if salt is not None else os.urandom(16)
     digest = hashlib.scrypt(
         password.encode(), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, dklen=KEY_LENGTH
     )
-    return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(digest)}"
+    fields = ("scrypt", str(SCRYPT_N), str(SCRYPT_R), str(SCRYPT_P), _b64(salt), _b64(digest))
+    return ":".join(fields)
+
+
+def _fields(stored: str) -> list[str] | None:
+    """The six fields of a stored hash, or ``None`` if it is not one.
+
+    The first version of the format used ``$``; hashes made with it are still read (they work
+    when the file is read without variable expansion, for example when quoted).
+    """
+    separator = "$" if stored.startswith("scrypt$") else ":"
+    fields = stored.split(separator)
+    return fields if len(fields) == 6 and fields[0] == "scrypt" else None
 
 
 def verify_password(password: str, stored: str) -> bool:
+    fields = _fields(stored)
+    if fields is None:
+        return False
+    _, n, r, p, salt, expected = fields
     try:
-        scheme, n, r, p, salt, expected = stored.split("$")
-        if scheme != "scrypt":
-            return False
         digest = hashlib.scrypt(
             password.encode(), salt=_unb64(salt), n=int(n), r=int(r), p=int(p), dklen=KEY_LENGTH
         )
@@ -66,13 +84,13 @@ class Approvers:
 
     @classmethod
     def parse(cls, value: str) -> "Approvers":
-        """``alice=scrypt$...,bob=scrypt$...``"""
+        """``alice=scrypt:...,bob=scrypt:...``"""
         hashes: dict[str, str] = {}
         for entry in filter(None, (part.strip() for part in value.split(","))):
             name, separator, stored = entry.partition("=")
             if not separator or not NAME.fullmatch(name):
-                raise AuthConfigError("APPROVERS entries look like name=scrypt$...")
-            if stored.count("$") != 5 or not stored.startswith("scrypt$"):
+                raise AuthConfigError("APPROVERS entries look like name=scrypt:...")
+            if _fields(stored) is None:
                 raise AuthConfigError(f"the password hash of {name!r} is not a scrypt hash")
             if name in hashes:
                 raise AuthConfigError(f"approver {name!r} is listed twice")
