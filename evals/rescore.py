@@ -18,6 +18,7 @@ from typing import Any
 from evals.explain_metrics import directives, ungrounded_figures
 from evals.explain_report import render_markdown, render_text
 from evals.explain_runner import INJECTION_CODE, ExplainResult, ExplainSummary
+from evals.thresholds import report_explain
 
 TUPLE_FIELDS = (
     "given",
@@ -76,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         date = datetime.now(UTC).strftime("%Y-%m-%d")
         args.report.write_text(render_markdown(summary, date=date), encoding="utf-8")
         print(f"\nreport written to {args.report}")
-    return 0
+    return report_explain(summary)
 
 
 if __name__ == "__main__":

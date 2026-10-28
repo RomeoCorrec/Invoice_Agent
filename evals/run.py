@@ -45,6 +45,7 @@ from evals.runner import (
     run_suite,
     skipped,
 )
+from evals.thresholds import report_explain
 from invoice_agent.agent.graph.explain_node import build_explain_config
 from invoice_agent.config import ConfigError, Settings, load_settings
 from invoice_agent.llm.anthropic_provider import AnthropicProvider
@@ -136,7 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         explained = _run_explain(args, settings, model, cases, tracing)
         tracing.shutdown()
         _finish(explained, explain_text, explain_markdown, args.report)
-        return 0
+        return report_explain(explained)
     inner = AnthropicProvider(
         api_key=settings.llm.api_key,
         model=model,
