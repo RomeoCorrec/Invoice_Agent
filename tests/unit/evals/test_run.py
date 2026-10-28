@@ -178,3 +178,17 @@ def test_an_explain_run_with_a_scripted_model_reports_and_saves(
     payload = json.loads(saved.read_text(encoding="utf-8"))
     assert payload["suite"] == "explain" and len(payload["results"]) == 9
     assert report.read_text(encoding="utf-8").startswith("# Evaluation: explain suite")
+
+
+def test_a_full_run_is_compared_with_the_extraction_thresholds_and_a_smoke_run_is_not(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setattr(run, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(run, "AnthropicProvider", lambda **_kw: FakeProvider(pick))
+    code = main(["--suite", "full", "--yes", "--no-langfuse"])
+    out = capsys.readouterr().out
+    assert "thresholds:" in out or "below the thresholds" in out
+    assert code == (0 if "thresholds: all met" in out else 1)
+    assert main(["--suite", "smoke", "--yes", "--no-langfuse"]) == 0
+    assert "thresholds" not in capsys.readouterr().out
