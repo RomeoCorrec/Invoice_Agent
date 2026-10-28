@@ -90,6 +90,8 @@ def test_system_identifiers_are_kept_exactly_under_their_keys() -> None:
     for ident in random_uuids(20_000):
         payload = {
             "entry_id": ident,
+            "document": f"uploads/{ident}.pdf",
+            "uri": f"uploads/{ident}.pdf",
             "idempotency_key": f"post:{ident}",
             "trace_id": ident.replace("-", ""),
         }
@@ -112,3 +114,10 @@ def test_a_value_under_an_identifier_key_must_have_the_identifier_shape() -> Non
     iban = "FR7699053965263585803695442"
     for value in (iban, f"post:{iban}", f"a {iban}"):
         assert iban not in str(redact_payload({"idempotency_key": value}))
+
+
+def test_the_name_of_a_file_that_a_person_chose_is_still_checked_for_an_iban() -> None:
+    iban = "FR7699053965263585803695442"
+    for key in ("document", "uri"):
+        for value in (f"{iban}.pdf", f"uploads/{iban}.pdf", f"uploads/{iban}-copy.pdf"):
+            assert iban not in str(redact_payload({key: value}))

@@ -28,10 +28,12 @@ SYSTEM_ID_KEYS = frozenset(
         "entry_id",
         "trace_id",
         "idempotency_key",
+        "document",  # the name the store gave an uploaded file
+        "uri",  # the same name, as the invoice source recorded it
     }
 )
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
-_SYSTEM_ID = re.compile(rf"^(?:{_UUID}|[0-9a-f]{{32}}|post:{_UUID})$")
+_SYSTEM_ID = re.compile(rf"^(?:{_UUID}|[0-9a-f]{{32}}|post:{_UUID}|uploads/{_UUID}\.pdf)$")
 
 
 def is_system_identifier(key: str | None, value: str) -> bool:
