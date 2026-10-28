@@ -392,3 +392,31 @@ def test_every_node_joins_the_trace_of_the_run(
     with session_scope(factory) as session:
         events = AuditEventRepository(session).list_for_run(run_id)
     assert {e.payload["trace_id"] for e in events if "trace_id" in e.payload} == {trace_id}
+
+
+def test_waiting_for_a_human_is_not_an_error_and_every_node_shows_what_it_got_and_gave(
+    traced: tuple[Tracing, InMemorySpanExporter],
+    factory: sessionmaker[Session],
+    documents: Path,
+    saver: PostgresSaver,
+    ledger_server: MCPServer,
+) -> None:
+    from opentelemetry.trace import StatusCode
+
+    tracing, exporter = traced
+    graph = graph_for(factory, documents, saver, tracing=tracing, ledger=ledger_server)
+    start(graph, document(documents, "INV-01"))  # stops at the approval request
+    tracing.flush()
+    nodes = {s.name: s for s in exporter.get_finished_spans() if s.name.startswith("node.")}
+
+    waiting = nodes["node.request_approval"]
+    attributes = dict(waiting.attributes or {})
+    assert waiting.status.status_code is not StatusCode.ERROR
+    assert attributes.get("langfuse.observation.level") != "ERROR"
+    assert "waiting for a human decision" in str(attributes["langfuse.observation.output"])
+
+    ingest = dict(nodes["node.ingest"].attributes or {})  # what Langfuse shows as Input/Output
+    assert "document" in str(ingest["langfuse.observation.input"])
+    assert "invoice_id" in str(ingest["langfuse.observation.output"])
+    validate = dict(nodes["node.validate"].attributes or {})
+    assert "anomaly_codes" in str(validate["langfuse.observation.output"])

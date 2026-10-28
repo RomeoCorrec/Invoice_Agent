@@ -43,22 +43,50 @@ def route_after_decision(state: AgentState) -> str:
     return "post_entry" if state.get("status") == InvoiceStatus.APPROVED.value else END
 
 
+MAX_TRACED_CHARS = 400
+
+
+def _brief(value: Any) -> Any:
+    """A copy of the state or of a node's result that is short enough to read in a trace."""
+    if isinstance(value, str):
+        return value if len(value) <= MAX_TRACED_CHARS else value[:MAX_TRACED_CHARS] + "..."
+    if isinstance(value, dict):
+        return {key: _brief(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_brief(item) for item in value]
+    return value
+
+
 def traced(name: str, node: Node, deps: AgentDeps) -> Node:
-    """One Langfuse span per node, in the invoice's trace."""
+    """One Langfuse span per node, in the invoice's trace, with what went in and what came out."""
 
     def run(state: AgentState) -> dict[str, Any]:
         tracing = deps.tracing
         # Inside a worker job a span is already open and the node nests under it; when a
         # run is resumed later there is none, and the span joins the run's trace by its id.
         trace_id = None if tracing.current_trace_id() else state.get("trace_id")
+        paused: GraphInterrupt | None = None
+        result: dict[str, Any] | None = None
         with tracing.observation(
-            f"node.{name}", trace_id=trace_id, metadata={"run_id": state.get("run_id")}
+            f"node.{name}",
+            trace_id=trace_id,
+            input=_brief(dict(state)),
+            metadata={"run_id": state.get("run_id")},
         ) as span:
             try:
-                return node(state)
-            except GraphInterrupt:
+                result = node(state)
+            except GraphInterrupt as stop:
+                # Waiting for a human is how the run is meant to stop, not a failure: the
+                # exception is raised again once the span is closed, so it is not recorded
+                # as an error.
                 span.update(output="waiting for a human decision")
-                raise
+                paused = stop
+            else:
+                span.update(output=_brief(result))
+        if paused is not None:
+            raise paused
+        assert result is not None
+        return result
 
     return run
 
