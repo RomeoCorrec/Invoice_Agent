@@ -1,10 +1,76 @@
-﻿# invoice-agent
+# invoice-agent
 
-An agentic system that processes supplier invoices for small French businesses: ingestion (Factur-X first, PDF fallback), deterministic checks, purchase-order matching, proposed accounting entry, human approval, and posting through an MCP server, with a full audit trail.
+An agentic system that processes supplier invoices for small French businesses. It reads each
+invoice (Factur-X first, a model for plain PDFs), runs deterministic checks, matches it
+against purchase orders, explains what looks wrong, proposes an accounting entry, **waits for
+a human**, and only then posts it to an accounting system through an MCP server, with a full
+audit trail and a trace of every step.
 
-Status: under construction. See [CLAUDE.md](CLAUDE.md) for the design principles and conventions.
+Context: since 1 September 2026 every French company must be able to receive e-invoices, and
+SMEs must issue them from 1 September 2027.
 
-## Getting started
+![The queue of invoices waiting for a decision, with an upload form](docs/images/queue.jpg)
+
+**What this project is about** (the design principles are in [CLAUDE.md](CLAUDE.md)):
+
+- **Deterministic first, the model second.** Totals, VAT, duplicates, SIREN and matching are
+  plain Python. The model reads documents that have no embedded XML and explains anomalies in
+  French; its text is advice and changes nothing.
+- **The model never acts.** The only write goes through a typed MCP tool with an idempotency
+  key, after a person approved an entry that the model did not write.
+- **Documents are untrusted input.** The model never sees a free-text string from a
+  document at the explain step; a planted instruction is flagged, not followed.
+- **Every decision is traceable**: an audit trail in the database and a
+  [Langfuse](https://langfuse.com) trace per invoice.
+- **Measured, not assumed**: a golden dataset of 21 invoices, evaluation suites with
+  thresholds that fail the run, and tests for each behaviour (more than a thousand tests, run in CI).
+
+Status: the pipeline, the approval interface and the evaluation are complete and run locally.
+The AWS deployment (Terraform) is not started.
+
+## See it work
+
+1. **Submit an invoice**: the PDF is checked, stored under a generated name and queued. The
+   page follows the run stage by stage, read from the audit events rather than from a timer.
+   If nothing picks the job up, it says so.
+
+   ![The run is waiting in the queue: no worker has picked it up](docs/images/progress-stalled.jpg)
+   ![The run reached the human decision](docs/images/progress-done.jpg)
+
+2. **Decide with the document in front of you**: the figures, the anomalies, the model's
+   explanation (labelled as such), the entry that would be posted, and the original PDF beside
+   it. Here, an invoice that contains a note addressed to an AI assistant: the rules flag it,
+   and the explanation says the instructions were not followed.
+
+   ![An invoice with the PDF beside the figures, the anomaly and the explanation](docs/images/invoice.jpg)
+
+3. **Trace it**: one Langfuse trace per invoice, with a span per graph node, the model calls
+   with their cost and tokens, and the read-only tool call the explanation made to the ledger
+   (here: 0.001 USD, 10.7 s, one lookup that found nothing).
+
+   ![The Langfuse trace of one invoice: ingest, validate, explain with a ledger lookup, entry, approval](docs/images/trace.jpg)
+
+### Try it locally
+
+```bash
+uv sync
+cp .env.example .env                       # set IBAN_HASH_KEY; add ANTHROPIC_API_KEY to use the model
+docker compose up -d db
+uv run alembic upgrade head
+uv run python -m invoice_agent.agent seed  # demo suppliers and purchase orders
+uv run python -m ledger seed               # the same reference data in the ledger schema
+uv run python -m invoice_agent.api hash-password   # then APPROVERS=you=<hash> in .env
+uv run python -m invoice_agent.api secret          # then WEB_SECRET=<value> in .env
+# DOCUMENT_ROOT in .env: a folder the web server and the worker both read and write
+uv run --env-file .env python -m invoice_agent.worker &
+uv run --env-file .env uvicorn invoice_agent.api.main:app_from_env --factory
+```
+
+Open <http://127.0.0.1:8000>, sign in, and submit a PDF from
+`tests/fixtures/invoice-test-set/invoices/`. The Factur-X files (`*_facturx.pdf`) need no model
+call. The `*_pdf.pdf` files and any anomaly use the model, at about 0.001 USD per invoice.
+
+## Development setup
 
 ```bash
 uv sync                                       # install dependencies
