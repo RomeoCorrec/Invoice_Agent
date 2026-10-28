@@ -142,6 +142,23 @@ anomaly precision 100 % and recall 84.6 % (the rest need invoice history), p50 l
 grounding check, as intended. Details in [docs/evals/latest.md](docs/evals/latest.md) and
 [ADR-0006](docs/adr/0006-llm-and-observability.md).
 
+The `explain` suite measures the node that explains anomalies, with checks written as code
+(no second model as a judge). A run keeps what the model wrote, so it can be scored again
+offline when a metric changes:
+
+```bash
+uv run --env-file .env python -m evals.run --suite explain --yes --max-cost 0.25
+uv run python -m evals.rescore evals/results/<run>.json --report docs/evals/explain.md
+```
+
+First measurement (Haiku 5.5, 8 invoices with anomalies, 0.005 USD): every anomaly covered, no
+invented code, no figure outside the case or the tool results (a gap between two amounts of
+the case counts as grounded), tools used in 3 cases out of 8 and always read-only, the
+injection case flagged as a risk without following it, p50 latency 3.9 s. The model's texts
+are in [docs/evals/explain.md](docs/evals/explain.md). The thresholds are in
+[evals/thresholds.yaml](evals/thresholds.yaml), set a little under this measurement; a run (or a
+rescoring) below one of them exits with code 1.
+
 ## The ledger and its tools
 
 The accounting system the agent posts to is a mock, kept apart from the agent on purpose: its

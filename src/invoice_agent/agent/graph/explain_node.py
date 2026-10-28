@@ -8,7 +8,7 @@ run goes on without an explanation and the audit log says so: a help must not fa
 """
 
 import json
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID, uuid4
 
 from pydantic import JsonValue
@@ -30,13 +30,30 @@ from invoice_agent.llm.traced import TracedProvider
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.tools.errors import ToolError, ToolRefusedError
 from invoice_agent.tools.sync_ledger import SyncLedgerReader
+from ledger.schemas import BookedInvoice, PurchaseOrderInfo, SupplierInfo
 
 STEP_EXPLAIN = "explain"
 STEP_EXPLAIN_UNAVAILABLE = "explain_unavailable"
 AGENT_ACTOR = "explainer"
 
 
-def read_only_tools(reader: SyncLedgerReader) -> list[ToolSpec]:
+class ReadOnlyLedger(Protocol):
+    """The lookups the tools need. ``SyncLedgerReader`` is one; an evaluation can use another."""
+
+    def get_supplier(
+        self, *, siren: str | None = None, vat_number: str | None = None
+    ) -> SupplierInfo | None: ...
+
+    def list_open_purchase_orders(self, supplier_code: str) -> list[PurchaseOrderInfo]: ...
+
+    def get_purchase_order(self, number: str) -> PurchaseOrderInfo | None: ...
+
+    def find_invoices(
+        self, supplier_siren: str, invoice_number: str | None = None
+    ) -> list[BookedInvoice]: ...
+
+
+def read_only_tools(reader: ReadOnlyLedger) -> list[ToolSpec]:
     """The only tools the model gets. There is no write tool in this list, by construction."""
 
     def text(value: Any) -> str:
@@ -117,7 +134,9 @@ def read_only_tools(reader: SyncLedgerReader) -> list[ToolSpec]:
     ]
 
 
-def build_explain_config(settings: Settings, tracing: Tracing) -> ExplainConfig | None:
+def build_explain_config(
+    settings: Settings, tracing: Tracing, *, model: str | None = None
+) -> ExplainConfig | None:
     """The production explainer, or ``None`` when no API key is configured."""
     if settings.llm.api_key is None:
         return None
@@ -125,7 +144,7 @@ def build_explain_config(settings: Settings, tracing: Tracing) -> ExplainConfig 
     provider = TracedProvider(
         AnthropicProvider(
             api_key=settings.llm.api_key,
-            model=settings.llm.model,
+            model=model or settings.llm.model,
             timeout_s=settings.llm.timeout_s,
             max_retries=settings.llm.max_retries,
             effort=settings.llm.effort,
@@ -199,21 +218,26 @@ def make_explain(deps: AgentDeps) -> Node:
     return explain
 
 
+def ask_model(config: ExplainConfig, case: str, tools: list[ToolSpec]) -> LlmResult[Explanation]:
+    """One bounded conversation about a case. The node and the evaluation both call this."""
+    return config.provider.converse(
+        system=config.prompt.text,
+        user=case,
+        schema=Explanation,
+        tools=tools,
+        max_tokens=config.max_tokens,
+        name="explain_anomalies",
+        max_tool_calls=config.max_tool_calls,
+        max_turns=config.max_turns,
+    )
+
+
 def _ask(deps: AgentDeps, config: ExplainConfig, case: str) -> LlmResult[Explanation]:
-    """One bounded conversation, with the ledger's read tools when a ledger is configured."""
-    arguments: dict[str, Any] = {
-        "system": config.prompt.text,
-        "user": case,
-        "schema": Explanation,
-        "max_tokens": config.max_tokens,
-        "name": "explain_anomalies",
-        "max_tool_calls": config.max_tool_calls,
-        "max_turns": config.max_turns,
-    }
+    """The conversation, with the ledger's read tools when a ledger is configured."""
     if deps.ledger is None:
-        return config.provider.converse(tools=[], **arguments)
+        return ask_model(config, case, [])
     with SyncLedgerReader(deps.ledger, policy=deps.ledger_policy, tracing=deps.tracing) as reader:
-        return config.provider.converse(tools=read_only_tools(reader), **arguments)
+        return ask_model(config, case, read_only_tools(reader))
 
 
 def _findings(events: list[AuditEvent]) -> list[dict[str, Any]]:

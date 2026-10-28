@@ -32,7 +32,11 @@ def test_values_that_are_not_json_are_stringified_not_dropped() -> None:
 
 def test_a_full_iban_never_reaches_the_logs() -> None:
     entry = render(error="rejected payment to FR76-9905-3965-2635-8580-3695-442 today")
-    assert "9905" not in json.dumps(entry)
+    # The whole line also holds the timestamp, whose microseconds can spell "9905" (they did, on
+    # CI): look for a fragment too long to be in a time, and for the short one only where the
+    # message is.
+    assert "99053965" not in json.dumps(entry)
+    assert "9905" not in str(entry["error"])
     assert "[IBAN redacted]" in str(entry["error"])
 
 

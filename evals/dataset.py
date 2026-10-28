@@ -63,4 +63,8 @@ def select(cases: list[EvalCase], suite: str) -> list[EvalCase]:
         return cases
     if suite == "smoke":
         return [case for case in cases if case.case_id in SMOKE_CASES]
-    raise ValueError(f"unknown suite {suite!r}: expected 'smoke' or 'full'")
+    if suite == "explain":
+        # The cases with something to explain. One of them (INV-20) is refused before the model
+        # in production, and the evaluation says so instead of hiding it.
+        return [case for case in cases if case.expected_anomalies]
+    raise ValueError(f"unknown suite {suite!r}: expected 'smoke', 'full' or 'explain'")
