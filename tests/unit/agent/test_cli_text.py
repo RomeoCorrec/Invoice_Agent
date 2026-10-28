@@ -1,4 +1,4 @@
-from invoice_agent.agent.__main__ import safe_text
+from invoice_agent.presentation import safe_text
 
 REPLACEMENT = "\N{REPLACEMENT CHARACTER}"
 

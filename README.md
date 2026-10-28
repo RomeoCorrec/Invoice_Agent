@@ -96,6 +96,24 @@ uv run python -m invoice_agent.agent approve <invoice-id> --by you@example.com
 uv run python -m invoice_agent.agent reject  <invoice-id> --by you@example.com --comment "..."
 ```
 
+## The approval interface
+
+A server-rendered web page replaces the command line for deciding: the queue of what is
+waiting, a page per invoice with the figures, the anomalies, the model's explanation (labelled
+as such) and the entry that would be posted, and the two buttons. The decision is recorded
+under the logged-in approver's name.
+
+```bash
+uv run python -m invoice_agent.api hash-password     # then: APPROVERS=alice=<hash> in .env
+uv run python -m invoice_agent.api secret            # WEB_SECRET=<value> in .env
+uv run --env-file .env uvicorn invoice_agent.api.main:app_from_env --factory
+```
+
+Open <http://127.0.0.1:8000>. HTTP Basic authentication on every page, a CSRF token on every
+decision, document text escaped and cleaned, a strict Content-Security-Policy with no inline
+script. See [ADR-0012](docs/adr/0012-web-approval-interface.md) for the choices and their
+limits (put TLS in front of it outside localhost).
+
 ## Running the worker
 
 ```bash
