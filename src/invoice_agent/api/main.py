@@ -12,11 +12,12 @@ import logging
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, ExitStack, asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -28,6 +29,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from invoice_agent.agent.graph.checkpoint import open_checkpointer
 from invoice_agent.agent.graph.nodes import StaleApprovalError
+from invoice_agent.agent.graph.progress import Progress, run_progress
 from invoice_agent.agent.graph.run import (
     CannotApproveError,
     Graph,
@@ -39,15 +41,17 @@ from invoice_agent.agent.graph.run import (
 from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.api.auth import csrf_token, csrf_valid
 from invoice_agent.api.config import WebConfig
+from invoice_agent.api.limits import BodyLimit
 from invoice_agent.config import load_settings
-from invoice_agent.db.repositories import InvoiceRepository
+from invoice_agent.db.repositories import InvoiceRepository, JobRepository
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
 from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.presentation import safe_text
+from invoice_agent.worker.handlers import PROCESS, process_job
 from invoice_agent.worker.main import build_agent_graph
-from invoice_agent.worker.store import DocumentStore, LocalDocumentStore, NoDocumentStore
+from invoice_agent.worker.store import LocalDocumentStore, NoDocumentStore, UploadStore
 
 logger = logging.getLogger("invoice_agent.api")
 
@@ -64,6 +68,10 @@ DOCUMENT_HEADERS = {
     "Content-Disposition": 'inline; filename="invoice.pdf"',
 }
 PDF_MAGIC = b"%PDF-"
+# The upload form is not about one invoice: its CSRF token is bound to this scope instead.
+UPLOAD_SCOPE = UUID(int=0)
+# What the multipart envelope adds around the file.
+UPLOAD_OVERHEAD = 64 * 1024
 SECURITY_HEADERS = {
     "Content-Security-Policy": CONTENT_SECURITY_POLICY,
     "X-Content-Type-Options": "nosniff",
@@ -96,8 +104,9 @@ def create_app(
     graph: Graph,
     session_factory: sessionmaker[Session],
     *,
-    documents: DocumentStore | None = None,
+    documents: UploadStore | None = None,
     max_document_bytes: int = 10_000_000,
+    job_attempts: int = 5,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -110,6 +119,7 @@ def create_app(
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.filters["clean"] = safe_text
     templates.env.globals["anomaly_labels"] = ANOMALY_LABELS
+    app.add_middleware(BodyLimit, path="/uploads", limit=max_document_bytes + UPLOAD_OVERHEAD)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     basic = HTTPBasic(auto_error=False)
 
@@ -153,7 +163,11 @@ def create_app(
     async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
         if exc.status_code == 401:
             return PlainTextResponse("authentication required", 401, headers=exc.headers)
-        texts = {403: "This form is not valid any more.", 404: "There is nothing here."}
+        texts = {
+            403: "This form is not valid any more.",
+            404: "There is nothing here.",
+            413: "The file is too large.",
+        }
         return message(request, exc.status_code, texts.get(exc.status_code, "The request failed."))
 
     @app.exception_handler(RequestValidationError)
@@ -173,6 +187,8 @@ def create_app(
             user=user,
             requests=pending_approvals(graph, session_factory),
             result=RESULTS.get(result or ""),
+            can_upload=documents is not None,
+            upload_csrf=csrf_token(config.secret, user, UPLOAD_SCOPE),
         )
 
     @app.get("/fragments/queue", response_class=HTMLResponse)
@@ -216,6 +232,50 @@ def create_app(
         if not content.startswith(PDF_MAGIC):
             return message(request, 404, "The document is not a PDF.")
         return Response(content, media_type="application/pdf", headers=DOCUMENT_HEADERS)
+
+    @app.post("/uploads")
+    def upload(
+        request: Request,
+        user: Approver,
+        file: Annotated[UploadFile, File()],
+        csrf: Annotated[str, Form()],
+    ) -> Response:
+        """Store the PDF under a generated name and queue it for a worker."""
+        if documents is None:
+            return message(request, 404, "Uploads are not available on this server.")
+        if not csrf_valid(config.secret, user, UPLOAD_SCOPE, csrf):
+            log_event(logger, "csrf_refused", level=logging.WARNING, user=safe_text(user, 40))
+            return message(request, 403, "This form is not valid any more. Reload the page.")
+        content = file.file.read(max_document_bytes + 1)
+        if len(content) > max_document_bytes:
+            return message(request, 413, "The file is too large.")
+        if not content.startswith(PDF_MAGIC):
+            return message(request, 422, "The file is not a PDF.")
+        name = documents.save(content)  # the name the client gave the file is never used
+        with session_scope(session_factory) as session:
+            job = JobRepository(session).enqueue(
+                process_job(name, now=datetime.now(UTC), max_attempts=job_attempts)
+            )
+        log_event(logger, "upload", user=safe_text(user, 40), job=str(job.id), bytes=len(content))
+        return RedirectResponse(f"/uploads/{job.id}", 303)
+
+    def progress_of_job(job_id: UUID) -> Progress | None:
+        with session_scope(session_factory) as session:
+            return run_progress(session, job_id, PROCESS, datetime.now(UTC))
+
+    @app.get("/uploads/{job_id}", response_class=HTMLResponse)
+    def upload_page(request: Request, job_id: UUID, user: Approver) -> HTMLResponse:
+        progress = progress_of_job(job_id)
+        if progress is None:
+            return message(request, 404, "There is nothing here.")
+        return render(request, "upload.html", user=user, job_id=job_id, progress=progress)
+
+    @app.get("/uploads/{job_id}/progress", response_class=HTMLResponse)
+    def upload_progress(request: Request, job_id: UUID, user: Approver) -> HTMLResponse:
+        progress = progress_of_job(job_id)
+        if progress is None:
+            return message(request, 404, "There is nothing here.")
+        return render(request, "_progress.html", job_id=job_id, progress=progress)
 
     @app.post("/invoices/{invoice_id}/decision")
     def decide(
@@ -275,5 +335,6 @@ def app_from_env() -> FastAPI:
         factory,
         documents=LocalDocumentStore(root) if root else None,
         max_document_bytes=settings.limits.max_document_bytes,
+        job_attempts=settings.worker.max_attempts,
         lifespan=lifespan,
     )

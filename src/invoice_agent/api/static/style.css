@@ -97,3 +97,30 @@ main.wide { max-width: 100rem; }
   .split .document { position: sticky; top: 1rem; }
   .split .document iframe { height: calc(100vh - 6rem); }
 }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.upload { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0 0 1.5rem; padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: 0.5rem; }
+.upload button { padding: 0.4rem 1rem; }
+
+.stages { list-style: none; margin: 1.5rem 0; padding: 0; }
+.stage { display: flex; align-items: center; gap: 0.9rem; padding: 0.55rem 0; color: var(--muted); position: relative; }
+.stage + .stage::before { content: ""; position: absolute; left: 0.5rem; top: -0.55rem; height: 1.1rem; width: 2px; background: var(--line); }
+.stage .dot { flex: none; width: 1.05rem; height: 1.05rem; border-radius: 50%; border: 2px solid var(--line); background: var(--card); }
+.stage.done { color: var(--fg); }
+.stage.done .dot { background: var(--ok); border-color: var(--ok); }
+.stage.active { color: var(--fg); font-weight: 600; }
+.stage.active .dot { border-color: var(--accent); background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.stage.failed { color: var(--bad); font-weight: 600; }
+.stage.failed .dot { background: var(--bad); border-color: var(--bad); }
+.stage.skipped { text-decoration: line-through; }
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  70% { box-shadow: 0 0 0 0.65rem transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage.active .dot { animation: none; }
+}

@@ -4,6 +4,14 @@
 {% block content %}
 <h1>Waiting for a decision</h1>
 {% if result %}<p class="notice" role="status">{{ result }}</p>{% endif %}
+{% if can_upload %}
+<form method="post" action="/uploads" enctype="multipart/form-data" class="upload">
+  <input type="hidden" name="csrf" value="{{ upload_csrf }}">
+  <label for="file">Submit an invoice (PDF)</label>
+  <input id="file" type="file" name="file" accept="application/pdf" required>
+  <button type="submit">Upload</button>
+</form>
+{% endif %}
 <noscript><p class="muted">Reload the page to see new invoices.</p></noscript>
 <div id="queue" hx-get="/fragments/queue" hx-trigger="every 5s" hx-swap="innerHTML">
 {% include "_queue_table.html" %}
