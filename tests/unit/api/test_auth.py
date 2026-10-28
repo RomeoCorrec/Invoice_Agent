@@ -92,7 +92,9 @@ def test_a_csrf_token_belongs_to_one_approver_and_one_invoice() -> None:
     assert not csrf_valid(SECRET, "bob", invoice, token)
     assert not csrf_valid(SECRET, "alice", uuid4(), token)
     assert not csrf_valid(b"t" * 32, "alice", invoice, token)
-    assert not csrf_valid(SECRET, "alice", invoice, token[:-1] + "0")
+    # Change the last character to a different one (one time in sixteen it already is "0").
+    altered = token[:-1] + ("1" if token.endswith("0") else "0")
+    assert altered != token and not csrf_valid(SECRET, "alice", invoice, altered)
     assert not csrf_valid(SECRET, "alice", invoice, "")
 
 
@@ -130,3 +132,11 @@ def test_a_hash_mixing_both_separators_is_refused() -> None:
     assert not verify_password("x", mixed)
     with pytest.raises(AuthConfigError, match="not a scrypt hash"):
         Approvers.parse(f"alice={mixed}")
+
+
+def test_the_tampered_token_check_does_not_depend_on_the_last_character() -> None:
+    for number in range(64):  # covers every last hex digit, which is what made the check flaky
+        invoice = uuid4()
+        token = csrf_token(SECRET, f"user{number}", invoice)
+        altered = token[:-1] + ("1" if token.endswith("0") else "0")
+        assert altered != token and not csrf_valid(SECRET, f"user{number}", invoice, altered)
