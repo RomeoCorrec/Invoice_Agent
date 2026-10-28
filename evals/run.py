@@ -45,7 +45,7 @@ from evals.runner import (
     run_suite,
     skipped,
 )
-from evals.thresholds import report_explain
+from evals.thresholds import report_explain, report_extraction
 from invoice_agent.agent.graph.explain_node import build_explain_config
 from invoice_agent.config import ConfigError, Settings, load_settings
 from invoice_agent.llm.anthropic_provider import AnthropicProvider
@@ -191,6 +191,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     tracing.shutdown()
 
     _finish(summary, render_text, render_markdown, args.report)
+    if args.suite == "full":  # a handful of smoke cases cannot prove a rate
+        return report_extraction(summary)
     return 0
 
 
