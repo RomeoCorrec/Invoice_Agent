@@ -34,22 +34,11 @@ from invoice_agent.db.reference_data import load_reference_data
 from invoice_agent.db.session import make_engine, make_session_factory, session_scope
 from invoice_agent.observability.logging import configure_logging
 from invoice_agent.observability.tracing import Tracing
+from invoice_agent.presentation import safe_text
 from invoice_agent.worker.main import build_agent_graph
 from invoice_agent.worker.store import NoDocumentStore
 
 logger = logging.getLogger("invoice_agent.agent")
-
-
-def safe_text(value: object, limit: int = 60) -> str:
-    """Text from a document, made safe to print: the reviewer's terminal must not obey it.
-
-    Control characters (escape sequences, carriage returns, newlines) and invisible format
-    characters such as bidirectional overrides are replaced, so a hostile invoice cannot
-    overwrite what the command prints or fake a line of output.
-    """
-    text = "".join(ch if ch.isprintable() else "\N{REPLACEMENT CHARACTER}" for ch in str(value))
-    return text[:limit]
-
 
 DEMO_REFERENCE = Path(__file__).parents[3] / "tests" / "fixtures" / "invoice-test-set" / "reference"
 
