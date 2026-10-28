@@ -139,7 +139,7 @@ def test_the_error_names_fields_but_never_echoes_document_content() -> None:
 
 
 def test_ground_truth_files_are_the_expected_dataset() -> None:
-    assert len(CASES) == 21
+    assert len(CASES) == 29
     assert json.loads(CASES[0].read_text(encoding="utf-8"))["case_id"] == "INV-01"
 
 

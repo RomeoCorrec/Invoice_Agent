@@ -129,7 +129,7 @@ def test_the_explain_dry_run_shows_its_own_plan_and_worst_case(
 ) -> None:
     assert main(["--suite", "explain", "--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert "explain suite: 9 cases, model claude-haiku-5-5" in out
+    assert "explain suite: 13 cases, model claude-haiku-5-5" in out
     assert "cap $2.00" in out
 
 
@@ -176,7 +176,7 @@ def test_an_explain_run_with_a_scripted_model_reports_and_saves(
     assert code == 0 and "Anomaly coverage" in out and "100.0%" in out
     [saved] = (tmp_path / "results").glob("*explain*.json")
     payload = json.loads(saved.read_text(encoding="utf-8"))
-    assert payload["suite"] == "explain" and len(payload["results"]) == 9
+    assert payload["suite"] == "explain" and len(payload["results"]) == 13
     assert report.read_text(encoding="utf-8").startswith("# Evaluation: explain suite")
 
 

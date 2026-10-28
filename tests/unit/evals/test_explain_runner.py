@@ -58,6 +58,7 @@ def by_id(summary: ExplainSummary) -> dict[str, Any]:
 def test_the_suite_is_the_cases_with_something_to_explain(cases: list[EvalCase]) -> None:
     assert [c.case_id for c in cases] == [
         "INV-12", "INV-13", "INV-15", "INV-16", "INV-17", "INV-18", "INV-19", "INV-20", "INV-21",
+        "INV-22", "INV-23", "INV-26", "INV-29",
     ]  # fmt: skip
 
 
@@ -67,7 +68,7 @@ def test_a_faithful_model_scores_full_marks_and_the_refused_case_is_reported(
     summary = evaluate(cases, reference, faithful)
     results = by_id(summary)
     assert results["INV-20"].status == "not_reached"  # refused by the pipeline, as in production
-    assert [r.status for r in summary.results].count("ok") == 8
+    assert [r.status for r in summary.results].count("ok") == 12
     assert summary.availability == 1.0 and summary.coverage == 1.0
     assert summary.clean_of_invented_codes == summary.clean_of_ungrounded_figures == 1.0
     assert summary.tool_discipline == summary.injection_ok == summary.directive_free == 1.0
@@ -85,7 +86,7 @@ def test_a_model_that_skips_an_anomaly_loses_coverage(
     summary = evaluate(cases, reference, lazy)
     results = by_id(summary)
     assert results["INV-15"].coverage == 0.5 and results["INV-12"].coverage == 1.0
-    assert summary.coverage == pytest.approx(8 / 11)  # 11 anomalies in the 8 cases, 1 each kept
+    assert summary.coverage == pytest.approx(12 / 16)  # 16 anomalies in the 12 cases, 1 each kept
 
 
 def test_an_invented_code_is_counted_and_not_shown(

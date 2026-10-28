@@ -21,7 +21,7 @@ def load(path: Path) -> dict[str, Any]:
 
 
 def test_dataset_is_present() -> None:
-    assert len(CASES) == 21
+    assert len(CASES) == 29
 
 
 @pytest.mark.parametrize("path", CASES, ids=lambda p: p.stem)

@@ -9,7 +9,7 @@ from invoice_agent.ingestion.document import ExtractionError, sha256_hex
 from invoice_agent.ingestion.pipeline import extract_invoice
 from tests.factories import GROUND_TRUTH, IBAN_KEY, golden_extraction
 from tests.fakes import ScriptedExtractor
-from tests.pdfs import blank_pdf, golden_pdf, pdf_with_attachment
+from tests.pdfs import blank_pdf, golden_pdf, pdf_with_attachment, scanned_pdf
 
 LIMITS = IngestionLimits()
 CASES = sorted(GROUND_TRUTH.glob("INV-*.json"))
@@ -64,6 +64,14 @@ def test_the_extractor_receives_the_document_text_and_nothing_else() -> None:
 def test_a_plain_pdf_without_extractor_is_refused() -> None:
     with pytest.raises(ExtractionError, match="no extractor"):
         run(golden_pdf("INV-09"), None)
+
+
+def test_a_scanned_page_is_refused_before_the_model_is_asked() -> None:
+    """Nothing to read means nothing to invent: the extractor is never called."""
+    extractor = ScriptedExtractor(RuntimeError("must not be called"))
+    with pytest.raises(ExtractionError, match="no text"):
+        run(scanned_pdf(), extractor)
+    assert extractor.received == []
 
 
 def test_an_extractor_that_obeys_the_injected_note_is_refused() -> None:

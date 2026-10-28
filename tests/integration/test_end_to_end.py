@@ -1,4 +1,4 @@
-"""Step 03 acceptance: the 21 PDFs, from raw bytes to a validated or flagged invoice.
+"""Step 03 acceptance: the 29 PDFs, from raw bytes to a validated or flagged invoice.
 
 Each PDF is ingested (Factur-X parsed, plain PDFs through a scripted extractor and the
 grounding check) and then validated with the step-02 rules, in order, against the dataset's
