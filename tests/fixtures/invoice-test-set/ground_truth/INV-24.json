@@ -1,0 +1,74 @@
+{
+  "case_id": "INV-24",
+  "title": "Reste de commande : première facture partielle",
+  "file": "invoices/INV-24_DC-2026-118_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "DC/2026/118",
+    "issue_date": "2026-10-18",
+    "due_date": "2026-11-17",
+    "currency": "EUR",
+    "seller": {
+      "name": "Cabinet Delorme Conseil",
+      "siren": "586323263",
+      "vat_number": "FR28586323263"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0117",
+    "iban": "FR7699065841650681552315323",
+    "lines": [
+      {
+        "description": "Coaching d'équipe de direction (jours)",
+        "quantity": "1",
+        "unit_price": "1000.00",
+        "vat_rate": "20.00",
+        "amount_ht": "1000.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "1000.00",
+        "vat": "200.00"
+      }
+    ],
+    "total_ht": "1000.00",
+    "total_vat": "200.00",
+    "total_ttc": "1200.00"
+  },
+  "expected_supplier_code": "SUP-003",
+  "expected_po_match": "PO-2026-0117",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-10-18",
+    "reference": "DC/2026/118",
+    "lines": [
+      {
+        "account": "6226",
+        "label": "Honoraires",
+        "debit": "1000.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "200.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401DELO",
+        "label": "Cabinet Delorme Conseil",
+        "debit": "0.00",
+        "credit": "1200.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Commande PO-2026-0117 : 3 jours (3 000,00 HT). Facture 1 jour : il reste 2 000,00. Aucune anomalie."
+}

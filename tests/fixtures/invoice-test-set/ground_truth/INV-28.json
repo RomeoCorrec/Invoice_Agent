@@ -1,0 +1,277 @@
+{
+  "case_id": "INV-28",
+  "title": "PDF sans XML sur deux pages (30 lignes)",
+  "file": "invoices/INV-28_CT-26-1402_pdf.pdf",
+  "format": "pdf_text_only",
+  "expected_extraction": {
+    "invoice_number": "CT-26-1402",
+    "issue_date": "2026-10-22",
+    "due_date": "2026-11-21",
+    "currency": "EUR",
+    "seller": {
+      "name": "ClimaTech Maintenance SAS",
+      "siren": "419058185",
+      "vat_number": "FR53419058185"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0120",
+    "iban": "FR7699370471326409308966394",
+    "lines": [
+      {
+        "description": "Contrôle annuel extincteur, local 01",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 02",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 03",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 04",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 05",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 06",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 07",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 08",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 09",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 10",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 11",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 12",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 13",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 14",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 15",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 16",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 17",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 18",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 19",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 20",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 21",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 22",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 23",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 24",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 25",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 26",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 27",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 28",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 29",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 30",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "vat_rate": "20.00",
+        "amount_ht": "45.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "1350.00",
+        "vat": "270.00"
+      }
+    ],
+    "total_ht": "1350.00",
+    "total_vat": "270.00",
+    "total_ttc": "1620.00"
+  },
+  "expected_supplier_code": "SUP-002",
+  "expected_po_match": "PO-2026-0120",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-10-22",
+    "reference": "CT-26-1402",
+    "lines": [
+      {
+        "account": "6156",
+        "label": "Maintenance",
+        "debit": "1350.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "270.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "401CLIM",
+        "label": "ClimaTech Maintenance SAS",
+        "debit": "0.00",
+        "credit": "1620.00"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Le tableau continue sur la seconde page, avec les totaux : l'extraction doit être complète."
+}

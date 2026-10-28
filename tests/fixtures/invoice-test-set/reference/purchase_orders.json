@@ -241,5 +241,281 @@
         "amount_ht": "1250.00"
       }
     ]
+  },
+  {
+    "number": "PO-2026-0116",
+    "supplier_code": "SUP-001",
+    "order_date": "2026-10-08",
+    "status": "open",
+    "total_ht": "186.00",
+    "lines": [
+      {
+        "description": "Enveloppes C5 autocollantes (carton de 500)",
+        "quantity": "12",
+        "unit_price": "15.50",
+        "amount_ht": "186.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0117",
+    "supplier_code": "SUP-003",
+    "order_date": "2026-10-09",
+    "status": "open",
+    "total_ht": "3000.00",
+    "lines": [
+      {
+        "description": "Coaching d'équipe de direction (jours)",
+        "quantity": "3",
+        "unit_price": "1000.00",
+        "amount_ht": "3000.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0118",
+    "supplier_code": "SUP-003",
+    "order_date": "2026-10-10",
+    "status": "open",
+    "total_ht": "3000.00",
+    "lines": [
+      {
+        "description": "Mission de conseil en gouvernance (forfait)",
+        "quantity": "1",
+        "unit_price": "3000.00",
+        "amount_ht": "3000.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0119",
+    "supplier_code": "SUP-006",
+    "order_date": "2026-10-11",
+    "status": "open",
+    "total_ht": "1835.00",
+    "lines": [
+      {
+        "description": "Livres d'entreprise, tirage de 100 exemplaires",
+        "quantity": "100",
+        "unit_price": "14.50",
+        "amount_ht": "1450.00"
+      },
+      {
+        "description": "Mise en page et maquette",
+        "quantity": "1",
+        "unit_price": "300.00",
+        "amount_ht": "300.00"
+      },
+      {
+        "description": "Débours : frais de dépôt légal avancés",
+        "quantity": "1",
+        "unit_price": "85.00",
+        "amount_ht": "85.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0120",
+    "supplier_code": "SUP-002",
+    "order_date": "2026-10-12",
+    "status": "open",
+    "total_ht": "1350.00",
+    "lines": [
+      {
+        "description": "Contrôle annuel extincteur, local 01",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 02",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 03",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 04",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 05",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 06",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 07",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 08",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 09",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 10",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 11",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 12",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 13",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 14",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 15",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 16",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 17",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 18",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 19",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 20",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 21",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 22",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 23",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 24",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 25",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 26",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 27",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 28",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 29",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      },
+      {
+        "description": "Contrôle annuel extincteur, local 30",
+        "quantity": "1",
+        "unit_price": "45.00",
+        "amount_ht": "45.00"
+      }
+    ]
+  },
+  {
+    "number": "PO-2026-0121",
+    "supplier_code": "SUP-004",
+    "order_date": "2026-10-13",
+    "status": "open",
+    "total_ht": "420.00",
+    "lines": [
+      {
+        "description": "Location matériel de captation vidéo (jour)",
+        "quantity": "2",
+        "unit_price": "210.00",
+        "amount_ht": "420.00"
+      }
+    ]
   }
 ]

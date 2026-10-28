@@ -1,0 +1,98 @@
+{
+  "case_id": "INV-27",
+  "title": "Nominal, TVA 5,5 %, 20 % et débours hors TVA",
+  "file": "invoices/INV-27_IV-2026-3433_facturx.pdf",
+  "format": "facturx_en16931",
+  "expected_extraction": {
+    "invoice_number": "IV-2026-3433",
+    "issue_date": "2026-10-21",
+    "due_date": "2026-11-20",
+    "currency": "EUR",
+    "seller": {
+      "name": "Imprimerie Vasseur & Fils",
+      "siren": "689132868",
+      "vat_number": "FR77689132868"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0119",
+    "iban": "FR7699470095021252774786577",
+    "lines": [
+      {
+        "description": "Livres d'entreprise, tirage de 100 exemplaires",
+        "quantity": "100",
+        "unit_price": "14.50",
+        "vat_rate": "5.50",
+        "amount_ht": "1450.00"
+      },
+      {
+        "description": "Mise en page et maquette",
+        "quantity": "1",
+        "unit_price": "300.00",
+        "vat_rate": "20.00",
+        "amount_ht": "300.00"
+      },
+      {
+        "description": "Débours : frais de dépôt légal avancés",
+        "quantity": "1",
+        "unit_price": "85.00",
+        "vat_rate": "0.00",
+        "amount_ht": "85.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "300.00",
+        "vat": "60.00"
+      },
+      {
+        "rate": "5.50",
+        "basis": "1450.00",
+        "vat": "79.75"
+      },
+      {
+        "rate": "0.00",
+        "basis": "85.00",
+        "vat": "0.00"
+      }
+    ],
+    "total_ht": "1835.00",
+    "total_vat": "139.75",
+    "total_ttc": "1974.75"
+  },
+  "expected_supplier_code": "SUP-006",
+  "expected_po_match": "PO-2026-0119",
+  "expected_anomalies": [],
+  "expected_status": "validated",
+  "expected_journal_entry": {
+    "journal": "ACH",
+    "date": "2026-10-21",
+    "reference": "IV-2026-3433",
+    "lines": [
+      {
+        "account": "6236",
+        "label": "Catalogues et imprimés",
+        "debit": "1835.00",
+        "credit": "0.00"
+      },
+      {
+        "account": "44566",
+        "label": "TVA déductible",
+        "debit": "139.75",
+        "credit": "0.00"
+      },
+      {
+        "account": "401VASS",
+        "label": "Imprimerie Vasseur & Fils",
+        "debit": "0.00",
+        "credit": "1974.75"
+      }
+    ]
+  },
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Trois taux : 5,5 % (livres), 20 % (prestation) et 0 % (débours, hors champ de la TVA)."
+}
