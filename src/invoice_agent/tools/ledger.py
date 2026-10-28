@@ -124,7 +124,7 @@ class LedgerConnection:
 
     async def call(self, tool: str, arguments: dict[str, Any]) -> Any:
         """Call a tool and return its result (``None`` for a null result)."""
-        with self._tracing.observation(f"tool.{tool}", input=arguments) as span:
+        with self._tracing.observation(f"ledger.{tool}", input=arguments) as span:
             try:
                 result = await self._call_with_retries(tool, arguments)
             except ToolError as exc:

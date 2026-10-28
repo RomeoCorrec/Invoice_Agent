@@ -81,6 +81,6 @@ def test_a_lookup_stays_in_the_trace_of_its_caller(
         reader.get_supplier(siren="151757747")
     tracing.flush()
     spans = {s.name: s for s in exporter.get_finished_spans()}
-    call, parent = spans["tool.get_supplier"], spans["explain"]
+    call, parent = spans["ledger.get_supplier"], spans["explain"]
     assert call.context.trace_id == parent.context.trace_id
     assert call.parent is not None and call.parent.span_id == parent.context.span_id
