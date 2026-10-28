@@ -62,3 +62,15 @@ def test_errors_never_contain_file_contents_or_paths(store: LocalDocumentStore) 
         store.read("../secret.txt", 1000)
     assert "SECRET" not in str(error.value)
     assert "secret.txt" not in str(error.value)
+
+
+def test_save_writes_under_uploads_with_a_generated_name_and_reads_back(
+    store: LocalDocumentStore, tmp_path: Path
+) -> None:
+    first, second = store.save(b"%PDF-new"), store.save(b"%PDF-new")
+    assert first != second  # never an overwrite, even for the same content
+    for name in (first, second):
+        assert name.startswith("uploads/") and name.endswith(".pdf")
+        assert store.read(name, 1000) == b"%PDF-new"
+        assert (tmp_path / "documents" / name).is_file()
+    assert (tmp_path / "secret.txt").read_bytes() == b"TOP-SECRET"
