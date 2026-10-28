@@ -26,9 +26,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "secret":
         print(secrets.token_urlsafe(48))
         return 0
-    password = (
-        getpass.getpass("Password: ") if sys.stdin.isatty() else sys.stdin.readline().rstrip("\r\n")
-    )
+    if sys.stdin.isatty():
+        password = getpass.getpass("Password: ")
+    else:
+        # Not a terminal (a pipe, or the shell of an editor): say what is awaited instead of
+        # appearing to hang.
+        print(
+            "Reading the password from standard input (pipe it in, or use a terminal).",
+            file=sys.stderr,
+        )
+        password = sys.stdin.readline().rstrip("\r\n")
     if len(password) < MIN_PASSWORD_LENGTH:
         print(f"the password must have at least {MIN_PASSWORD_LENGTH} characters", file=sys.stderr)
         return 2

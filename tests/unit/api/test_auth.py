@@ -1,3 +1,4 @@
+import re
 from uuid import uuid4
 
 import pytest
@@ -18,7 +19,7 @@ SECRET = b"s" * 32
 
 def test_a_password_is_checked_against_its_hash() -> None:
     stored = hash_password("correct horse")
-    assert stored.startswith("scrypt$16384$8$1$")
+    assert stored.startswith("scrypt:16384:8:1:")
     assert verify_password("correct horse", stored)
     assert not verify_password("wrong", stored)
     assert not verify_password("", stored)
@@ -31,7 +32,8 @@ def test_the_hash_does_not_contain_the_password_and_changes_with_the_salt() -> N
 
 
 @pytest.mark.parametrize(
-    "stored", ["", "plain", "scrypt$1$2", "md5$1$8$1$aa$bb", "scrypt$x$8$1$aa$bb"]
+    "stored",
+    ["", "plain", "scrypt:1:2", "md5:1:8:1:aa:bb", "scrypt:x:8:1:aa:bb", "scrypt$x$8$1$aa$bb"],
 )
 def test_a_malformed_hash_never_matches_and_never_crashes(stored: str) -> None:
     assert verify_password("anything", stored) is False
@@ -72,8 +74,9 @@ def test_an_unknown_name_is_checked_like_a_known_one() -> None:
     [
         ("", "lists nobody"),
         ("alice", "name=scrypt"),
-        ("bad name=scrypt$1$2$3$4$5", "name=scrypt"),
+        ("bad name=scrypt:1:2:3:4:5", "name=scrypt"),
         ("alice=plaintext", "not a scrypt hash"),
+        ("alice=scrypt:1:2:3", "not a scrypt hash"),
         (f"alice={hash_password('x')},alice={hash_password('y')}", "listed twice"),
     ],
 )
@@ -102,3 +105,28 @@ def test_the_web_configuration_needs_approvers_and_a_long_secret() -> None:
         WebConfig.from_env({**good, "APPROVERS": ""})
     with pytest.raises(ConfigError, match="WEB_SECRET"):
         WebConfig.from_env({**good, "WEB_SECRET": "short"})
+
+
+def test_the_hash_survives_the_readers_of_env_files() -> None:
+    """uv, docker compose and dotenv libraries expand $name in values: the hash has no dollar."""
+    stored = hash_password("correct horse battery")
+    assert "$" not in stored
+    expanded = re.sub(r"\$\{?\w+\}?", "", stored)  # what an env-file reader does to $16384
+    assert expanded == stored
+    assert verify_password("correct horse battery", expanded)
+
+
+def test_a_hash_made_with_the_first_format_is_still_read() -> None:
+    stored = hash_password("old format password")
+    legacy = stored.replace(":", "$")
+    assert legacy.startswith("scrypt$16384$8$1$")
+    assert verify_password("old format password", legacy)
+    assert not verify_password("another password", legacy)
+    assert Approvers.parse(f"alice={legacy}").authenticate("alice", "old format password")
+
+
+def test_a_hash_mixing_both_separators_is_refused() -> None:
+    mixed = hash_password("x").replace(":", "$", 2)
+    assert not verify_password("x", mixed)
+    with pytest.raises(AuthConfigError, match="not a scrypt hash"):
+        Approvers.parse(f"alice={mixed}")
