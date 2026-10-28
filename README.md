@@ -103,13 +103,20 @@ waiting, a page per invoice with the figures, the anomalies, the model's explana
 as such) and the entry that would be posted, and the two buttons. The decision is recorded
 under the logged-in approver's name.
 
+The page of an invoice shows the stored PDF next to the figures, so the approver can check
+one against the other. The document is read from `DOCUMENT_ROOT` by the name the database
+holds for that invoice (never a name from the request), only if it really is a PDF, and it is
+served with a policy that lets only the application's own page frame it. The queue refreshes
+every few seconds with [htmx](docs/third-party.md) (a vendored, hash-pinned file, no CDN) and
+still works without JavaScript.
+
 ```bash
 uv run python -m invoice_agent.api hash-password     # then: APPROVERS=alice=<hash> in .env
 uv run python -m invoice_agent.api secret            # WEB_SECRET=<value> in .env
 uv run --env-file .env uvicorn invoice_agent.api.main:app_from_env --factory
 ```
 
-Open <http://127.0.0.1:8000>. HTTP Basic authentication on every page, a CSRF token on every
+Set `DOCUMENT_ROOT` too (the folder the worker reads) to see the documents. Open <http://127.0.0.1:8000>. HTTP Basic authentication on every page, a CSRF token on every
 decision, document text escaped and cleaned, a strict Content-Security-Policy with no inline
 script. See [ADR-0012](docs/adr/0012-web-approval-interface.md) for the choices and their
 limits (put TLS in front of it outside localhost).
