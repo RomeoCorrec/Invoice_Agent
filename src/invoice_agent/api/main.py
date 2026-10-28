@@ -40,20 +40,30 @@ from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.api.auth import csrf_token, csrf_valid
 from invoice_agent.api.config import WebConfig
 from invoice_agent.config import load_settings
-from invoice_agent.db.session import make_engine, make_session_factory
+from invoice_agent.db.repositories import InvoiceRepository
+from invoice_agent.db.session import make_engine, make_session_factory, session_scope
+from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.presentation import safe_text
 from invoice_agent.worker.main import build_agent_graph
-from invoice_agent.worker.store import NoDocumentStore
+from invoice_agent.worker.store import DocumentStore, LocalDocumentStore, NoDocumentStore
 
 logger = logging.getLogger("invoice_agent.api")
 
 HERE = Path(__file__).parent
 CONTENT_SECURITY_POLICY = (
     "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; "
-    "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+    "connect-src 'self'; frame-src 'self'; form-action 'self'; base-uri 'none'; "
+    "frame-ancestors 'none'"
 )
+# The PDF is shown in a frame of our own page, so only it may be framed, and only by us.
+DOCUMENT_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'self'",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Content-Disposition": 'inline; filename="invoice.pdf"',
+}
+PDF_MAGIC = b"%PDF-"
 SECURITY_HEADERS = {
     "Content-Security-Policy": CONTENT_SECURITY_POLICY,
     "X-Content-Type-Options": "nosniff",
@@ -86,6 +96,8 @@ def create_app(
     graph: Graph,
     session_factory: sessionmaker[Session],
     *,
+    documents: DocumentStore | None = None,
+    max_document_bytes: int = 10_000_000,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -134,7 +146,7 @@ def create_app(
     ) -> Response:
         response = await call_next(request)
         for name, value in SECURITY_HEADERS.items():
-            response.headers[name] = value
+            response.headers.setdefault(name, value)  # a route may set a stricter variant
         return response
 
     @app.exception_handler(StarletteHTTPException)
@@ -163,6 +175,13 @@ def create_app(
             result=RESULTS.get(result or ""),
         )
 
+    @app.get("/fragments/queue", response_class=HTMLResponse)
+    def queue_fragment(request: Request, user: Approver) -> HTMLResponse:
+        """The queue table alone, for the page to refresh itself."""
+        return render(
+            request, "_queue_table.html", requests=pending_approvals(graph, session_factory)
+        )
+
     @app.get("/invoices/{invoice_id}", response_class=HTMLResponse)
     def invoice_page(request: Request, invoice_id: UUID, user: Approver) -> HTMLResponse:
         waiting = pending_request(graph, session_factory, invoice_id)
@@ -175,8 +194,28 @@ def create_app(
             "invoice.html",
             user=user,
             invoice=waiting,
+            invoice_id=invoice_id,
+            has_document=documents is not None,
             csrf=csrf_token(config.secret, user, invoice_id),
         )
+
+    @app.get("/invoices/{invoice_id}/document")
+    def document(request: Request, invoice_id: UUID, user: Approver) -> Response:
+        """The stored PDF of an invoice. The name comes from our database, never from the URL."""
+        if documents is None:
+            return message(request, 404, "Documents are not available on this server.")
+        with session_scope(session_factory) as session:
+            invoice = InvoiceRepository(session).get(invoice_id)
+            name = invoice.source.uri if invoice else None
+        if name is None:
+            return message(request, 404, "There is nothing here.")
+        try:
+            content = documents.read(name, max_document_bytes)
+        except ExtractionError:
+            return message(request, 404, "The document is not available.")
+        if not content.startswith(PDF_MAGIC):
+            return message(request, 404, "The document is not a PDF.")
+        return Response(content, media_type="application/pdf", headers=DOCUMENT_HEADERS)
 
     @app.post("/invoices/{invoice_id}/decision")
     def decide(
@@ -229,4 +268,12 @@ def app_from_env() -> FastAPI:
         stack.close()
         engine.dispose()
 
-    return create_app(web, graph, factory, lifespan=lifespan)
+    root = settings.worker.document_root
+    return create_app(
+        web,
+        graph,
+        factory,
+        documents=LocalDocumentStore(root) if root else None,
+        max_document_bytes=settings.limits.max_document_bytes,
+        lifespan=lifespan,
+    )

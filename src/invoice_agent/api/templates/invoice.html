@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Invoice {{ invoice.invoice_number | clean(40) }}{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
 <p><a href="/">← Waiting for a decision</a></p>
 <h1>Invoice {{ invoice.invoice_number | clean(40) }}</h1>
 
+<div class="split">
+<div class="data">
 <dl class="facts">
   <dt>Supplier</dt><dd>{{ invoice.seller | clean(80) }}</dd>
   <dt>Net</dt><dd>{{ invoice.total_ht | clean(20) }} {{ invoice.currency | clean(3) }}</dd>
@@ -73,4 +76,14 @@
     <button type="submit" name="verdict" value="reject" class="reject">Reject</button>
   </div>
 </form>
+</div>
+<aside class="document" aria-label="Invoice document">
+  {% if has_document %}
+  <iframe src="/invoices/{{ invoice_id }}/document" title="The invoice as received"></iframe>
+  <p class="muted"><a href="/invoices/{{ invoice_id }}/document" target="_blank" rel="noopener">Open the document in a new tab</a></p>
+  {% else %}
+  <p class="muted">The document is not available on this server (DOCUMENT_ROOT is not set).</p>
+  {% endif %}
+</aside>
+</div>
 {% endblock %}
