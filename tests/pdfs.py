@@ -7,6 +7,7 @@ from pathlib import Path
 from pypdf import PdfWriter
 
 INVOICES = Path(__file__).parent / "fixtures" / "invoice-test-set" / "invoices"
+ROBUSTNESS = Path(__file__).parent / "fixtures" / "invoice-test-set" / "robustness"
 
 
 def blank_pdf(pages: int = 1) -> bytes:
@@ -34,6 +35,11 @@ def encrypted_pdf() -> bytes:
     buffer = io.BytesIO()
     writer.write(buffer)
     return buffer.getvalue()
+
+
+def scanned_pdf() -> bytes:
+    """A page that is only a picture of an invoice: no text layer, no embedded XML."""
+    return (ROBUSTNESS / "scanned_invoice.pdf").read_bytes()
 
 
 def golden_pdf(case_id: str) -> bytes:

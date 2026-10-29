@@ -22,7 +22,7 @@ SMEs must issue them from 1 September 2027.
   document at the explain step; a planted instruction is flagged, not followed.
 - **Every decision is traceable**: an audit trail in the database and a
   [Langfuse](https://langfuse.com) trace per invoice.
-- **Measured, not assumed**: a golden dataset of 21 invoices, evaluation suites with
+- **Measured, not assumed**: a golden dataset of 29 invoices, evaluation suites with
   thresholds that fail the run, and tests for each behaviour (more than a thousand tests, run in CI).
 
 Status: the pipeline, the approval interface and the evaluation are complete and run locally.
@@ -226,7 +226,7 @@ tracing is off; without an API key the worker skips PDFs that need the model.
 
 - **One trace per invoice**: the job, one span per graph node and the model call share a
   trace, also after the human pause; the trace id is stored in the audit events. IBANs and API keys are masked before anything is sent.
-- **Evaluation** on the 21 golden invoices, also run as a Langfuse experiment on the dataset
+- **Evaluation** on the 29 golden invoices, also run as a Langfuse experiment on the dataset
   `invoice-golden`:
 
 ```bash
@@ -236,10 +236,17 @@ uv run --env-file .env python -m evals.run --suite full --yes --max-cost 0.25
 
 Calling the API costs money: nothing is sent without `--yes`, and `--max-cost` stops the run.
 
-First measurement (Haiku 5.5, 21 invoices, 0.01 USD in total): field accuracy 94.5 %,
-anomaly precision 100 % and recall 84.6 % (the rest need invoice history), p50 latency
-2.5 s. One document that hides an instruction between table cells is refused by the
-grounding check, as intended. Details in [docs/evals/latest.md](docs/evals/latest.md) and
+Measurement (Haiku 5.5, 29 invoices, 0.014 USD in total): field accuracy 94.1 %, anomaly
+precision 100 % and recall 88.9 % (the rest need invoice history), figures unchanged under
+every injection, p50 latency 2.1 s. One document that hides an instruction between table
+cells is refused by the grounding check, as intended; in this run the check also refused a
+second one because the model misread an IBAN (it passed in the previous run: the model is
+not deterministic, and failing closed is what the check is for). Eight cases were added to
+the first 21 (plain-PDF anomalies, the cumulative remaining amount of an order, VAT at 5.5 %
+and 0 %, a two-page invoice, an English injection aimed at an agent); all eight were read and
+judged correctly. Thresholds on these metrics are in
+[evals/thresholds.yaml](evals/thresholds.yaml) and fail the command when broken. Details in
+[docs/evals/latest.md](docs/evals/latest.md) and
 [ADR-0006](docs/adr/0006-llm-and-observability.md).
 
 The `explain` suite measures the node that explains anomalies, with checks written as code

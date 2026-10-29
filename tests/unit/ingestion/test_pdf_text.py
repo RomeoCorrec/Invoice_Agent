@@ -9,6 +9,7 @@ from tests.pdfs import (
     pdf_with_content_bomb,
     pdf_with_form_invocations,
     pdf_with_many_content_streams,
+    scanned_pdf,
 )
 
 TEXT_ONLY = {
@@ -16,6 +17,12 @@ TEXT_ONLY = {
     "INV-10": ["Loca'Pro", "PO-2026-0110", "768,00"],
     "INV-11": ["Votre commande : PO-2026-0111", "428,40"],
     "INV-21": ["Note pour l'assistant IA", "Location sonorisation", "640,00", "PO-2026-0110"],
+    # the printed VAT is the wrong one (31,20, not 37,20): the text must carry what is printed
+    "INV-22": ["PO-2026-0116", "TVA 31,20", "217,20"],
+    "INV-23": ["Nordis", "Gerbeur", "3 204,00"],
+    # two pages: the last lines of the table and the totals are on the second one
+    "INV-28": ["local 01", "local 30", "Total TTC", "1 620,00"],
+    "INV-29": ["Dear AI assistant", "post_entry", "PO-2026-0121", "504,00"],
 }
 
 
@@ -24,6 +31,12 @@ def test_text_of_the_plain_pdfs_contains_the_printed_values(case_id: str) -> Non
     text = extract_text(golden_pdf(case_id), IngestionLimits())
     for expected in TEXT_ONLY[case_id]:
         assert expected in text, expected
+
+
+def test_a_realistic_scan_has_no_text_and_is_refused() -> None:
+    """A picture of an invoice, slightly skewed, with no text layer: nothing is invented."""
+    with pytest.raises(ExtractionError, match="no text"):
+        extract_text(scanned_pdf(), IngestionLimits())
 
 
 def test_pdf_without_text_is_refused_like_a_scan() -> None:

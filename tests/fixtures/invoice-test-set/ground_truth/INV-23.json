@@ -1,0 +1,60 @@
+{
+  "case_id": "INV-23",
+  "title": "PDF sans XML : fournisseur inconnu",
+  "file": "invoices/INV-23_NE-2026-0101_pdf.pdf",
+  "format": "pdf_text_only",
+  "expected_extraction": {
+    "invoice_number": "NE-2026-0101",
+    "issue_date": "2026-10-17",
+    "due_date": "2026-11-16",
+    "currency": "EUR",
+    "seller": {
+      "name": "Nordis Équipements SAS",
+      "siren": "963203419",
+      "vat_number": "FR57963203419"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": null,
+    "iban": "FR7699048536196013316272541",
+    "lines": [
+      {
+        "description": "Gerbeur électrique 1,2 t",
+        "quantity": "1",
+        "unit_price": "2480.00",
+        "vat_rate": "20.00",
+        "amount_ht": "2480.00"
+      },
+      {
+        "description": "Formation à la conduite",
+        "quantity": "1",
+        "unit_price": "190.00",
+        "vat_rate": "20.00",
+        "amount_ht": "190.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "2670.00",
+        "vat": "534.00"
+      }
+    ],
+    "total_ht": "2670.00",
+    "total_vat": "534.00",
+    "total_ttc": "3204.00"
+  },
+  "expected_supplier_code": null,
+  "expected_po_match": null,
+  "expected_anomalies": [
+    "NO_PO_MATCH",
+    "UNKNOWN_SUPPLIER"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Même fournisseur inconnu que INV-15, autre facture, sans XML : le SIREN doit être extrait du texte."
+}

@@ -1,4 +1,4 @@
-"""Step 05 acceptance: the 21 PDFs go through the job queue, from enqueue to validation."""
+"""Step 05 acceptance: the 29 PDFs go through the job queue, from enqueue to validation."""
 
 import json
 import shutil
@@ -134,8 +134,8 @@ def processed(
 
 
 def test_every_job_succeeded_and_none_is_left(processed: dict[str, Any]) -> None:
-    assert processed["handled"] == 21  # one job per document: the graph does the rest
-    assert processed["counts"] == {JobStatus.SUCCEEDED: 21}
+    assert processed["handled"] == 29  # one job per document: the graph does the rest
+    assert processed["counts"] == {JobStatus.SUCCEEDED: 29}
 
 
 @pytest.mark.parametrize("path", CASES, ids=lambda p: p.stem)

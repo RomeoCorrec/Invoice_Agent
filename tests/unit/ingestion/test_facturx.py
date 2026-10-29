@@ -24,15 +24,17 @@ FACTURX_CASES = [
     for path in sorted(GROUND_TRUTH.glob("INV-*.json"))
     if json.loads(path.read_text(encoding="utf-8"))["format"] == "facturx_en16931"
 ]
-TEXT_ONLY_CASES = ["INV-09", "INV-10", "INV-11", "INV-21"]
+TEXT_ONLY_CASES = [
+    "INV-09", "INV-10", "INV-11", "INV-21", "INV-22", "INV-23", "INV-28", "INV-29",
+]  # fmt: skip
 
 
 def expected(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))["expected_extraction"]  # type: ignore[no-any-return]
 
 
-def test_the_dataset_has_17_facturx_and_4_text_only_invoices() -> None:
-    assert len(FACTURX_CASES) == 17
+def test_the_dataset_has_21_facturx_and_8_text_only_invoices() -> None:
+    assert len(FACTURX_CASES) == 21
     assert {p.stem for p in GROUND_TRUTH.glob("INV-*.json")} - {
         p.stem for p in FACTURX_CASES
     } == set(TEXT_ONLY_CASES)

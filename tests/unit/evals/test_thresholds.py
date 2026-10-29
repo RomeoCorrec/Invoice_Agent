@@ -182,7 +182,7 @@ def test_the_explain_command_fails_when_a_model_explains_too_little(
 ) -> None:
     scripted(monkeypatch, keep=1)  # only the first anomaly of each invoice
     assert main(["--suite", "explain", "--yes", "--no-langfuse"]) == 1
-    assert "coverage: 0.7273 < 0.9" in capsys.readouterr().out
+    assert "coverage: 0.75 < 0.9" in capsys.readouterr().out
 
 
 def test_rescoring_applies_the_thresholds_too(

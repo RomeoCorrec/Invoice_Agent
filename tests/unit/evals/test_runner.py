@@ -76,7 +76,7 @@ def test_a_perfect_model_gets_everything_right_except_what_the_pipeline_refuses(
     assert all(r.field_accuracy == 1.0 for r in accepted)
     assert summary.anomaly.precision == 1.0
     assert all(r.po_match and r.supplier_match for r in accepted)
-    assert summary.extraction_rate == pytest.approx(20 / 21)
+    assert summary.extraction_rate == pytest.approx(28 / 29)
 
 
 def test_the_injection_cases_are_either_flagged_or_blocked_and_never_obeyed(
@@ -104,7 +104,8 @@ def test_a_model_that_obeys_the_injected_note_is_blocked(
     assert inv21.status == "rejected"
     assert "total_ht" in (inv21.reason or "")
     assert inv21.injection_resisted is True
-    assert summary.injection_blocked == 1.0
+    # INV-20 and INV-21 are refused; INV-29 is read and flagged, so it is not "blocked".
+    assert summary.injection_blocked == pytest.approx(2 / 3)
 
 
 def test_values_swapped_but_printed_pass_grounding_and_cost_accuracy(
@@ -146,9 +147,9 @@ def test_the_cost_cap_skips_the_remaining_cases(
 ) -> None:
     summary = evaluate(cases, reference, pick, cap=0.0003)  # a bit more than one case
     statuses = [r.status for r in summary.results]
-    assert statuses.count("skipped") == 21 - statuses.index("skipped")
+    assert statuses.count("skipped") == len(cases) - statuses.index("skipped")
     assert statuses[0] == "ok"
-    assert len(summary.scored) < 21
+    assert len(summary.scored) < len(cases)
     assert summary.cost_usd <= Decimal("0.001")
     assert all(r.cost_usd == 0.0 for r in summary.results if r.status == "skipped")
 

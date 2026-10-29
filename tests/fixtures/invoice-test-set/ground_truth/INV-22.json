@@ -1,0 +1,52 @@
+{
+  "case_id": "INV-22",
+  "title": "PDF sans XML : TVA fausse (le modèle doit lire la valeur imprimée)",
+  "file": "invoices/INV-22_PM-2026-0561_pdf.pdf",
+  "format": "pdf_text_only",
+  "expected_extraction": {
+    "invoice_number": "PM-2026-0561",
+    "issue_date": "2026-10-16",
+    "due_date": "2026-11-15",
+    "currency": "EUR",
+    "seller": {
+      "name": "Papeterie Mercier SARL",
+      "siren": "151757747",
+      "vat_number": "FR67151757747"
+    },
+    "buyer": {
+      "name": "Atelier Lumen SAS",
+      "siren": "213033558"
+    },
+    "purchase_order_ref": "PO-2026-0116",
+    "iban": "FR7699053965263585803695442",
+    "lines": [
+      {
+        "description": "Enveloppes C5 autocollantes (carton de 500)",
+        "quantity": "12",
+        "unit_price": "15.50",
+        "vat_rate": "20.00",
+        "amount_ht": "186.00"
+      }
+    ],
+    "vat_breakdown": [
+      {
+        "rate": "20.00",
+        "basis": "186.00",
+        "vat": "31.20"
+      }
+    ],
+    "total_ht": "186.00",
+    "total_vat": "31.20",
+    "total_ttc": "217.20"
+  },
+  "expected_supplier_code": "SUP-001",
+  "expected_po_match": "PO-2026-0116",
+  "expected_anomalies": [
+    "VAT_AMOUNT_MISMATCH"
+  ],
+  "expected_status": "needs_review",
+  "expected_journal_entry": null,
+  "duplicate_of": null,
+  "prompt_injection": false,
+  "comment": "Base 186,00 à 20 % : TVA attendue 37,20, imprimée 31,20 (chiffres permutés). Le TTC = HT + TVA imprimée. L'extraction ne doit pas « corriger » la TVA : c'est la règle déterministe qui la signale."
+}

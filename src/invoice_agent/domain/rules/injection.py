@@ -36,6 +36,16 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
         ),
         "address_the_ai": (
             r"\b(assistant|agent)\s+ia\b|\bnote\s+pour\s+l.?(assistant|ia)\b|\bfor\s+the\s+(ai|assistant|model)\b"
+            r"|\b(dear|hello|attention|note\s+to)\s+(the\s+)?(ai|llm)\b"
+            r"|\b(dear|hello|attention|note\s+to)\s+(the\s+)?(ai\s+)?(assistant|agent|model)\b"
+        ),
+        # Tells the reader to use a tool or to skip a control: invoices have no business doing it.
+        "tool_call_instruction": (
+            r"\b(call|invoke|execute|trigger)\b.{0,30}\b(post_?\s?entry|tools?|functions?)\b"
+            r"|\bapproved\s*=\s*true\b"
+        ),
+        "skip_control": (
+            r"\b(skip|bypass|circumvent)\b.{0,30}\b(approval|review|validation|checks?|controls?)\b"
         ),
         # Tells the reader which account to pay, e.g. INV-21 ("l'IBAN a utiliser est ...").
         "payment_instruction": (
