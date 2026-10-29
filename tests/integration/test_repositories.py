@@ -59,6 +59,30 @@ def test_supplier_without_iban(session: Session) -> None:
     assert repo.get(supplier.id) == supplier
 
 
+def test_the_contact_address_of_a_supplier_is_stored_and_optional(session: Session) -> None:
+    repo = SupplierRepository(session)
+    with_contact = make_supplier(contact_email="compta@papeterie-mercier-sarl.example")
+    without = make_supplier(siren="623671427", siret="62367142700011")
+    repo.add(with_contact)
+    repo.add(without)
+    session.expunge_all()
+    assert repo.get(with_contact.id) == with_contact
+    found = repo.get(without.id)
+    assert found is not None and found.contact_email is None
+
+
+def test_the_demo_suppliers_all_have_a_distinct_fictitious_contact(session: Session) -> None:
+    from tests.integration.reference import load_reference
+
+    ids = load_reference(session)
+    contacts = [SupplierRepository(session).get(supplier_id) for supplier_id in ids.values()]
+    addresses = [c.contact_email for c in contacts if c is not None]
+    assert len(addresses) == len(ids) == len(set(addresses))
+    assert all(
+        a is not None and a.startswith("compta@") and a.endswith(".example") for a in addresses
+    )
+
+
 def test_supplier_lookups(session: Session) -> None:
     repo = SupplierRepository(session)
     supplier = make_supplier(code="SUP-042", siren="419058185")

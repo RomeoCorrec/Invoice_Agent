@@ -6,6 +6,8 @@ accounting system.
 """
 
 import json
+import re
+import unicodedata
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -15,6 +17,17 @@ from invoice_agent.db.repositories import PurchaseOrderRepository, SupplierRepos
 from invoice_agent.domain.iban import IbanFingerprint
 from invoice_agent.domain.purchase_order import PurchaseOrder, PurchaseOrderLine
 from invoice_agent.domain.supplier import Supplier
+
+
+def demo_contact_address(supplier_name: str) -> str:
+    """A fictitious accounting address for a demo supplier: ``compta@<name>.example``.
+
+    ``.example`` can never be registered, so nothing sent to it can reach a real person. Shared by
+    the agent's seed and the mailbox's, which must agree on who may be written to.
+    """
+    ascii_name = unicodedata.normalize("NFKD", supplier_name).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    return f"compta@{slug}.example"
 
 
 def load_reference_data(session: Session, directory: Path, iban_key: bytes) -> dict[str, UUID]:
@@ -32,6 +45,7 @@ def load_reference_data(session: Session, directory: Path, iban_key: bytes) -> d
             iban=IbanFingerprint.from_iban(raw["iban"], iban_key),
             default_expense_account=raw["default_expense_account"],
             supplier_account=raw["supplier_account"],
+            contact_email=demo_contact_address(raw["name"]),
         )
         SupplierRepository(session).add(supplier)
         supplier_ids[raw["code"]] = supplier.id

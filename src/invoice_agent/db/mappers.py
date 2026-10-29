@@ -52,6 +52,7 @@ def supplier_to_row(supplier: Supplier) -> SupplierRow:
         iban_hash=supplier.iban.digest if supplier.iban else None,
         default_expense_account=supplier.default_expense_account,
         supplier_account=supplier.supplier_account,
+        contact_email=supplier.contact_email,
     )
 
 
@@ -66,6 +67,7 @@ def supplier_to_domain(row: SupplierRow) -> Supplier:
         iban=_fingerprint(row.iban_masked, row.iban_hash),
         default_expense_account=row.default_expense_account,
         supplier_account=row.supplier_account,
+        contact_email=row.contact_email,
     )
 
 
