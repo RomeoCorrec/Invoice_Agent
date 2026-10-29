@@ -15,6 +15,23 @@ from invoice_agent.domain.iban import redact_ibans
 Approver = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
+class PauseKind(StrEnum):
+    """What a paused run is waiting for. Every interrupt payload carries one, as ``kind``.
+
+    The human task inbox of the web interface lists the pauses by kind, and an answer is only
+    accepted for the kind it was asked for (ADR-0014).
+    """
+
+    APPROVAL = "approval"
+    """Approve or reject an invoice."""
+    REVIEW_DRAFT = "review_draft"
+    """Read, edit and send (or discard) a message to the supplier."""
+    AWAIT_REPLY = "await_reply"
+    """Nobody to answer: the supplier's reply, or the deadline, resumes the run."""
+    REVIEW_REPLY = "review_reply"
+    """Read the supplier's reply and decide what it settles."""
+
+
 class Verdict(StrEnum):
     APPROVE = "approve"
     REJECT = "reject"

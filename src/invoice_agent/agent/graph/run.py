@@ -15,7 +15,7 @@ from langgraph.types import Command
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph.nodes import REVIEWABLE, STEP_RECEIVE
-from invoice_agent.agent.graph.state import AgentState, ApprovalDecision, Verdict
+from invoice_agent.agent.graph.state import AgentState, ApprovalDecision, PauseKind, Verdict
 from invoice_agent.db.repositories import AuditEventRepository, InvoiceRepository
 from invoice_agent.db.session import session_scope
 
@@ -34,9 +34,19 @@ class CannotApproveError(ValueError):
 class RunStatus:
     run_id: UUID
     finished: bool
-    awaiting_approval: dict[str, Any] | None
-    """The request shown to the reviewer while the run is waiting, otherwise ``None``."""
+    pending: dict[str, Any] | None
+    """What the run is waiting for, as its pause payload, otherwise ``None``."""
     state: AgentState
+
+    @property
+    def pending_kind(self) -> str | None:
+        return str(self.pending.get("kind")) if self.pending else None
+
+    @property
+    def awaiting_approval(self) -> dict[str, Any] | None:
+        """The request shown to the reviewer while the run waits for a decision on the
+        invoice, otherwise ``None`` (a run can wait for something else: a draft to review)."""
+        return self.pending if self.pending_kind == PauseKind.APPROVAL else None
 
 
 def _config(run_id: UUID) -> RunnableConfig:
@@ -49,7 +59,7 @@ def run_status(graph: Graph, run_id: UUID) -> RunStatus:
     return RunStatus(
         run_id=run_id,
         finished=bool(snapshot.values) and not snapshot.next,
-        awaiting_approval=pending[0] if pending else None,
+        pending=pending[0] if pending else None,
         state=snapshot.values,  # type: ignore[arg-type]
     )
 
@@ -62,7 +72,7 @@ def start_run(
     current = run_status(graph, run_id)
     if not current.state:
         graph.invoke({"document": document, "run_id": str(run_id), "trace_id": trace_id}, config)
-    elif not current.finished and current.awaiting_approval is None:
+    elif not current.finished and current.pending is None:
         graph.invoke(None, config)  # a node failed or the process died: continue from there
     return run_status(graph, run_id)
 
