@@ -80,12 +80,12 @@ def build_case(data: InvoiceData, anomalies: list[dict[str, Any]]) -> str:
                 {"rate": str(v.rate), "basis": str(v.basis), "vat": str(v.vat)}
                 for v in data.vat_breakdown
             ],
-            "purchase_order_ref": _token(data.purchase_order_ref),
+            "purchase_order_ref": safe_token(data.purchase_order_ref),
         },
         "anomalies": [
             {
                 "code": a["code"],
-                "message": _message(str(a["code"]), a.get("message")),
+                "message": safe_message(str(a["code"]), a.get("message")),
                 "evidence": _safe_evidence(a.get("evidence", {})),
             }
             for a in anomalies
@@ -95,12 +95,12 @@ def build_case(data: InvoiceData, anomalies: list[dict[str, Any]]) -> str:
     return f"<case>\n{body}\n</case>"
 
 
-def _token(value: object) -> str | None:
+def safe_token(value: object) -> str | None:
     """A value kept only if it looks like an identifier: no space, so no sentence fits."""
     return value if isinstance(value, str) and SAFE_TOKEN.fullmatch(value) else None
 
 
-def _message(code: str, message: object) -> str:
+def safe_message(code: str, message: object) -> str:
     """Our own description of a finding, deny by default.
 
     The message of a rule is sent only if the rule is known to write it from our own text and
