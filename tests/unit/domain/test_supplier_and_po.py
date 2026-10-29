@@ -62,3 +62,30 @@ def test_purchase_order_needs_at_least_one_line() -> None:
         PurchaseOrder(
             id=uuid4(), number="PO-1", supplier_id=uuid4(), order_date=date(2026, 9, 1), lines=()
         )
+
+
+def test_a_supplier_may_have_no_contact_address() -> None:
+    assert make_supplier().contact_email is None
+    assert make_supplier(contact_email="compta@papeterie-mercier.example").contact_email == (
+        "compta@papeterie-mercier.example"
+    )
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "no-at-sign",
+        "two@@signs.example",
+        "name@",
+        "@domain.example",
+        "name@domain",  # no dot
+        "a b@domain.example",  # a space
+        "name@domain.example\nBcc: attacker@evil.example",  # a header smuggled in
+        "one@domain.example, two@domain.example",  # several recipients
+        "name@domain.example>",
+        "x" * 250 + "@d.example",  # longer than an address can be
+    ],
+)
+def test_a_contact_address_must_look_like_one_address(address: str) -> None:
+    with pytest.raises(ValidationError):
+        make_supplier(contact_email=address)

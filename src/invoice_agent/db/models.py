@@ -56,6 +56,7 @@ class SupplierRow(Base):
     iban_hash: Mapped[str | None] = mapped_column(String(64))
     default_expense_account: Mapped[str] = mapped_column(String(16))
     supplier_account: Mapped[str] = mapped_column(String(16))
+    contact_email: Mapped[str | None] = mapped_column(String(254))
 
 
 class PurchaseOrderRow(Base):

@@ -49,6 +49,14 @@ VatRate = Annotated[
 ]
 """VAT rate in percent, e.g. ``Decimal("20.00")``."""
 
+# An address is checked by shape only: the point is to refuse what cannot be an address
+# (spaces, line breaks, several addresses), not to implement RFC 5322.
+EmailAddress = Annotated[
+    str,
+    StringConstraints(
+        max_length=254, pattern=r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)+$"
+    ),
+]
 Siren = Annotated[str, StringConstraints(pattern=r"^\d{9}$")]
 Siret = Annotated[str, StringConstraints(pattern=r"^\d{14}$")]
 """Format only. The Luhn check is a business rule (step 2), so invalid ones stay representable."""
