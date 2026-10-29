@@ -17,6 +17,7 @@ from invoice_agent.agent.graph.deps import AgentDeps
 from invoice_agent.agent.graph.state import (
     AgentState,
     ApprovalDecision,
+    PauseKind,
     Verdict,
     invoice_id_of,
     run_id_of,
@@ -144,6 +145,7 @@ def approval_request(
     data = invoice.data
     assert data is not None
     return {
+        "kind": PauseKind.APPROVAL.value,
         "invoice_id": str(invoice.id),
         "invoice_number": data.invoice_number,
         "seller": data.seller.name,

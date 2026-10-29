@@ -61,8 +61,10 @@ def test_a_clean_invoice_stops_for_a_human_with_a_summary(
     assert request["anomaly_codes"] == [] and request["total_ttc"] == str(
         golden_extraction(GROUND_TRUTH / "INV-01.json").total_ttc
     )
+    assert request["kind"] == "approval" and run.pending_kind == "approval"
+    assert run.pending == request  # the only thing this run can be waiting for
     assert set(request) == {
-        "invoice_id", "invoice_number", "seller", "currency",
+        "kind", "invoice_id", "invoice_number", "seller", "currency",
         "total_ht", "total_vat", "total_ttc", "status", "anomaly_codes",
         "entry", "entry_blocked", "explanation",
     }  # fmt: skip
