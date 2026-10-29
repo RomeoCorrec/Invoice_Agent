@@ -12,7 +12,7 @@ from invoice_agent.config import IngestionLimits
 from invoice_agent.ingestion.extractor import InvoiceExtractor
 from invoice_agent.ingestion.reading import RawDocument, read_document
 from invoice_agent.llm.prompt import Prompt
-from invoice_agent.llm.provider import ToolProvider
+from invoice_agent.llm.provider import LlmProvider, ToolProvider
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.tools.ledger import CallPolicy
 from invoice_agent.worker.store import DocumentStore
@@ -34,6 +34,17 @@ class ExplainConfig:
 
 
 @dataclass(frozen=True)
+class QueryConfig:
+    """How the message to a supplier is written: the model may polish it, the code decides."""
+
+    provider: LlmProvider | None = None
+    prompt: Prompt | None = None
+    """Without a provider and a prompt the template is the draft."""
+    max_rounds: int = 2
+    """Messages in one conversation: the first, and one reminder or follow-up."""
+
+
+@dataclass(frozen=True)
 class AgentDeps:
     session_factory: sessionmaker[Session]
     """Each node opens its own transaction: that is what lets a run resume after a crash."""
@@ -50,3 +61,8 @@ class AgentDeps:
     ledger_policy: CallPolicy = field(default_factory=CallPolicy)
     explain: ExplainConfig | None = None
     """Without it, anomalies are not explained and the run is otherwise the same."""
+    mailroom: MCPServer | StdioServerParameters | None = None
+    """Where to reach the mail provider. Without it a rejection that asks the supplier closes
+    the conversation at once: nothing can be sent."""
+    mailroom_policy: CallPolicy = field(default_factory=CallPolicy)
+    query: QueryConfig = field(default_factory=QueryConfig)
