@@ -106,3 +106,34 @@ def test_secrets_never_appear_in_the_repr_of_the_settings() -> None:
     assert "sk-ant-very-secret" not in shown
     assert "hhhh" not in shown
     assert "postgresql" not in shown
+
+
+def test_mail_defaults_and_overrides() -> None:
+    settings = load_settings(VALID)
+    assert settings.mailroom_database_url is None  # the agent's own database
+    assert (settings.mail.reply_deadline_days, settings.mail.poll_interval_s) == (3, 60)
+    assert settings.mail.lookback_days == 7
+    settings = load_settings(
+        {
+            **VALID,
+            "MAILROOM_DATABASE_URL": "postgresql+psycopg://u:p@other/db",
+            "REPLY_DEADLINE_DAYS": "5",
+            "MAIL_POLL_SECONDS": "30",
+            "MAIL_LOOKBACK_DAYS": "14",
+        }
+    )
+    assert settings.mailroom_database_url == "postgresql+psycopg://u:p@other/db"
+    assert (settings.mail.reply_deadline_days, settings.mail.poll_interval_s) == (5, 30)
+    assert settings.mail.lookback_days == 14
+
+
+@pytest.mark.parametrize("name", ["REPLY_DEADLINE_DAYS", "MAIL_POLL_SECONDS", "MAIL_LOOKBACK_DAYS"])
+@pytest.mark.parametrize("bad", ["0", "-1", "soon"])
+def test_invalid_mail_settings_are_refused(name: str, bad: str) -> None:
+    with pytest.raises(ConfigError, match=name):
+        load_settings({**VALID, name: bad})
+
+
+def test_the_mailroom_url_does_not_appear_in_the_repr() -> None:
+    settings = load_settings({**VALID, "MAILROOM_DATABASE_URL": "postgresql://u:secret@h/db"})
+    assert "secret" not in repr(settings)

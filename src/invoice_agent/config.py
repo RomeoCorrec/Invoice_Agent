@@ -39,6 +39,18 @@ class WorkerSettings:
 
 
 @dataclass(frozen=True)
+class MailSettings:
+    """How the supplier correspondence waits and listens (ADR-0014)."""
+
+    reply_deadline_days: int = 3
+    """How long a supplier has to answer before the wait ends (and one reminder is drafted)."""
+    poll_interval_s: int = 60
+    """How often the worker looks for new replies."""
+    lookback_days: int = 7
+    """How far back a poll looks: a reply that arrived while the worker was down is found."""
+
+
+@dataclass(frozen=True)
 class LlmSettings:
     api_key: str | None = field(default=None, repr=False)
     """None disables the language model: PDFs without an embedded XML then fail cleanly."""
@@ -58,6 +70,9 @@ class Settings:
     llm: LlmSettings = field(default_factory=LlmSettings)
     ledger_database_url: str | None = field(default=None, repr=False)
     """Database of the ledger; the agent's own database when not set."""
+    mailroom_database_url: str | None = field(default=None, repr=False)
+    """Database of the mailroom; the agent's own database when not set."""
+    mail: MailSettings = field(default_factory=MailSettings)
 
 
 def _positive_int(environ: Mapping[str, str], name: str, default: int) -> int:
@@ -100,6 +115,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     defaults = IngestionLimits()
     worker_defaults = WorkerSettings()
     llm_defaults = LlmSettings()
+    mail_defaults = MailSettings()
     root = env.get("DOCUMENT_ROOT")
     raw_effort = env.get("LLM_EFFORT", llm_defaults.effort)
     if raw_effort not in get_args(Effort):
@@ -109,6 +125,14 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         database_url=database_url,
         iban_hash_key=key.encode(),
         ledger_database_url=env.get("LEDGER_DATABASE_URL") or None,
+        mailroom_database_url=env.get("MAILROOM_DATABASE_URL") or None,
+        mail=MailSettings(
+            reply_deadline_days=_positive_int(
+                env, "REPLY_DEADLINE_DAYS", mail_defaults.reply_deadline_days
+            ),
+            poll_interval_s=_positive_int(env, "MAIL_POLL_SECONDS", mail_defaults.poll_interval_s),
+            lookback_days=_positive_int(env, "MAIL_LOOKBACK_DAYS", mail_defaults.lookback_days),
+        ),
         limits=IngestionLimits(
             max_document_bytes=_positive_int(
                 env, "MAX_DOCUMENT_BYTES", defaults.max_document_bytes

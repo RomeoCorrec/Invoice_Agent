@@ -7,6 +7,7 @@ down, or no model at all, all end the same way: the template stands, and the res
 """
 
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -15,8 +16,13 @@ from pydantic import ValidationError
 from invoice_agent.agent.correspondence.checks import check_draft
 from invoice_agent.agent.correspondence.facts import QueryFacts
 from invoice_agent.agent.correspondence.templates import QueryDraft, template_draft
-from invoice_agent.llm.prompt import Prompt
+from invoice_agent.agent.graph.deps import QueryConfig
+from invoice_agent.config import Settings
+from invoice_agent.llm.anthropic_provider import AnthropicProvider
+from invoice_agent.llm.prompt import Prompt, load_prompt
 from invoice_agent.llm.provider import LlmError, LlmProvider
+from invoice_agent.llm.traced import TracedProvider
+from invoice_agent.observability.tracing import Tracing
 
 CALL_NAME = "draft_supplier_query"
 MAX_TOKENS = 1000
@@ -32,6 +38,26 @@ class DraftResult:
     """The checks the model's text failed, when it was refused."""
     cost_usd: Decimal = Decimal(0)
     model: str | None = None
+
+
+def build_query_config(settings: Settings, tracing: Tracing) -> QueryConfig:
+    """The production drafting configuration. Without an API key the template is the draft."""
+    deadline = timedelta(days=settings.mail.reply_deadline_days)
+    if settings.llm.api_key is None:
+        return QueryConfig(reply_deadline=deadline)
+    prompt = load_prompt("draft_supplier_query", 1)
+    provider = TracedProvider(
+        AnthropicProvider(
+            api_key=settings.llm.api_key,
+            model=settings.llm.model,
+            timeout_s=settings.llm.timeout_s,
+            max_retries=settings.llm.max_retries,
+            effort=settings.llm.effort,
+        ),
+        tracing,
+        prompt_label=prompt.label,
+    )
+    return QueryConfig(provider=provider, prompt=prompt, reply_deadline=deadline)
 
 
 def make_draft(
