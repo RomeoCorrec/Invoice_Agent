@@ -124,3 +124,7 @@ main.wide { max-width: 100rem; }
 @media (prefers-reduced-motion: reduce) {
   .stage.active .dot { animation: none; }
 }
+.copies { padding-left: 1.2rem; }
+.copies li { margin: 0.35rem 0; }
+table.orders tr.mine td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
+.warn { color: var(--bad); }

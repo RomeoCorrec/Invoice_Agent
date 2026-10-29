@@ -41,6 +41,7 @@ from invoice_agent.agent.graph.run import (
 from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.api.auth import csrf_token, csrf_valid
 from invoice_agent.api.config import WebConfig
+from invoice_agent.api.context import decision_context
 from invoice_agent.api.limits import BodyLimit
 from invoice_agent.config import load_settings
 from invoice_agent.db.repositories import InvoiceRepository, JobRepository
@@ -205,6 +206,8 @@ def create_app(
             return message(
                 request, 404, "No run is waiting for a decision on this invoice (already decided?)."
             )
+        with session_scope(session_factory) as session:
+            context = decision_context(session, invoice_id)
         return render(
             request,
             "invoice.html",
@@ -212,6 +215,7 @@ def create_app(
             invoice=waiting,
             invoice_id=invoice_id,
             has_document=documents is not None,
+            context=context,
             csrf=csrf_token(config.secret, user, invoice_id),
         )
 

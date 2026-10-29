@@ -26,6 +26,56 @@
 <p class="muted">The rules found nothing.</p>
 {% endif %}
 
+{% if context and context.copies %}
+<h2>Other copies of this invoice</h2>
+<p class="muted">The same file, or the same invoice number from the same seller.</p>
+<ul class="copies">
+  {% for copy in context.copies %}
+  <li>
+    {{ copy.invoice_number | clean(40) }}
+    <span class="badge {{ 'review' if copy.status.value == 'needs_review' else 'clean' }}">{{ copy.status.value | clean(20) }}</span>
+    received {{ copy.received_at.strftime('%Y-%m-%d %H:%M') }} UTC{% if copy.same_file %}, <strong>same file</strong>{% endif %}
+    {% if has_document %}· <a href="/invoices/{{ copy.invoice_id }}/document" target="_blank" rel="noopener">document</a>{% endif %}
+    {% if copy.decidable %}· <a href="/invoices/{{ copy.invoice_id }}">its page</a>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if context %}
+<h2>Purchase orders of this supplier</h2>
+{% if not context.supplier_known %}
+<p class="muted">The seller is not a known supplier, so there are no orders to compare with.</p>
+{% else %}
+  {% if context.cited_ref and not context.cited_found %}
+  <p class="warning">The invoice quotes <strong>{{ context.cited_ref | clean(40) }}</strong>, which is not an open order of this supplier.</p>
+  {% elif not context.cited_ref %}
+  <p class="muted">The invoice quotes no order number.</p>
+  {% endif %}
+  {% if context.orders %}
+  <table class="orders">
+    <thead>
+      <tr><th scope="col">Order</th><th scope="col">Date</th><th scope="col" class="num">Total HT</th><th scope="col" class="num">Billed</th><th scope="col" class="num">Left</th><th scope="col"></th></tr>
+    </thead>
+    <tbody>
+      {% for order in context.orders %}
+      <tr{% if order.cited or order.matched %} class="mine"{% endif %}>
+        <td>{{ order.number | clean(20) }}</td>
+        <td>{{ order.order_date.isoformat() }}</td>
+        <td class="num">{{ order.total_ht }}</td>
+        <td class="num">{{ order.billed_ht }}</td>
+        <td class="num">{{ order.remaining_ht if order.remaining_ht > 0 else '0.00' }}</td>
+        <td>{% if order.cited %}quoted{% endif %}{% if order.cited and order.matched %}, {% endif %}{% if order.matched %}matched{% endif %}{% if order.remaining_ht < 0 %}{% if order.cited or order.matched %} · {% endif %}<span class="warn">over-billed by {{ -order.remaining_ht }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">This supplier has no open order.</p>
+  {% endif %}
+{% endif %}
+{% endif %}
+
 {% if invoice.explanation %}
 <h2>Explanation</h2>
 <p class="muted">Written by the model: check it against the figures above.</p>

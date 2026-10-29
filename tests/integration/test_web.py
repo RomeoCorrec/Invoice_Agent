@@ -2,6 +2,7 @@
 
 import logging
 import re
+import shutil
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -755,3 +756,106 @@ def test_without_a_document_store_there_is_no_upload(
     with TestClient(web.create_app(config, graph, factory)) as c:
         assert "/uploads" not in c.get("/", auth=ALICE).text
         assert upload(c, b"%PDF-1.4").status_code == 404
+
+
+# --- what is shown next to an invoice: the orders and the copies -------------------------------
+
+
+def ingest(graph: Graph, documents: Path, case: str) -> UUID:
+    """Bring one more golden invoice to the approval pause and return its id."""
+    [source] = INVOICES.glob(f"{case}_*.pdf")
+    shutil.copy(source, documents / source.name)
+    return UUID(start(graph, source.name).state["invoice_id"])
+
+
+def test_the_page_lists_the_orders_of_the_supplier_and_marks_the_one_that_matched(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]]
+) -> None:
+    page = client.get(f"/invoices/{ids(waiting)['INV-12']}", auth=ALICE).text
+    assert "Purchase orders of this supplier" in page
+    row = re.search(r'<tr class="mine">\s*<td>PO-2026-0112</td>(.*?)</tr>', page, re.DOTALL)
+    assert row, page
+    assert "880.00" in row.group(1) and "quoted, matched" in row.group(1)
+    assert "PO-2026-0105" in page and "570.00" in page  # the supplier's other open order
+    assert "is not an open order" not in page
+
+
+def test_a_quoted_order_that_does_not_exist_is_said_and_the_real_ones_are_shown(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    invoice = ingest(waiting[0], documents, "INV-17")  # quotes PO-2026-0999, supplier SUP-004
+    page = client.get(f"/invoices/{invoice}", auth=ALICE).text
+    assert "quotes <strong>PO-2026-0999</strong>, which is not an open order" in page
+    assert "PO-2026-0104" in page and "PO-2026-0110" in page
+    assert 'class="mine"' not in page  # nothing to highlight
+
+
+def test_an_unknown_supplier_has_no_orders_to_compare_with(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    invoice = ingest(waiting[0], documents, "INV-15")
+    page = client.get(f"/invoices/{invoice}", auth=ALICE).text
+    assert "not a known supplier, so there are no orders" in page
+    assert '<table class="orders"' not in page
+
+
+def test_the_remaining_amount_counts_what_other_invoices_already_billed(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    first = ingest(waiting[0], documents, "INV-24")  # 1 000.00 of the 3 000.00 of PO-2026-0117
+    second = ingest(waiting[0], documents, "INV-25")  # the balance
+    page = client.get(f"/invoices/{second}", auth=ALICE).text
+    row = re.search(r'<tr class="mine">\s*<td>PO-2026-0117</td>(.*?)</tr>', page, re.DOTALL)
+    assert row
+    cells = re.findall(r'<td class="num">([^<]+)</td>', row.group(1))
+    assert cells == ["3000.00", "1000.00", "2000.00"]  # total, billed by INV-24, left
+    assert first != second
+
+
+def test_a_copy_of_the_invoice_is_shown_with_its_status_and_links_in_both_directions(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    original = ids(waiting)["INV-01"]
+    copy = ingest(waiting[0], documents, "INV-14")  # same number, same seller, sent again
+    page = client.get(f"/invoices/{copy}", auth=ALICE).text
+    assert "Other copies of this invoice" in page
+    section = page[page.index("Other copies of this invoice") : page.index("Purchase orders")]
+    assert "PM-2026-0457" in section and "validated" in section
+    assert f'href="/invoices/{original}/document"' in section  # its PDF
+    assert f'href="/invoices/{original}"' in section  # it is waiting too: its own page
+    back = client.get(f"/invoices/{original}", auth=ALICE).text
+    assert f'href="/invoices/{copy}"' in back  # and the original points to the copy
+
+
+def test_an_invoice_without_copies_has_no_such_section(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]]
+) -> None:
+    assert "Other copies" not in client.get(f"/invoices/{ids(waiting)['INV-12']}", auth=ALICE).text
+
+
+def test_a_copy_that_was_decided_links_to_its_document_but_not_to_a_page_that_is_gone(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    original = ids(waiting)["INV-01"]
+    copy = ingest(waiting[0], documents, "INV-14")
+    assert decide(client, original, "reject").status_code == 303  # the original is now rejected
+    section = client.get(f"/invoices/{copy}", auth=ALICE).text
+    assert f'href="/invoices/{original}/document"' in section
+    assert f'href="/invoices/{original}"' not in section  # nothing waits on that page any more
+    assert "rejected" in section
+
+
+def test_an_order_billed_beyond_its_total_shows_nothing_left_and_says_by_how_much(
+    client: TestClient, waiting: tuple[Graph, dict[str, UUID]], documents: Path
+) -> None:
+    graph = waiting[0]
+    ingest(graph, documents, "INV-14")  # a second invoice for the order INV-01 already used up
+    [source] = INVOICES.glob("INV-14_*.pdf")
+    shutil.copy(source, documents / "third_copy.pdf")
+    third = UUID(start(graph, "third_copy.pdf").state["invoice_id"])
+    page = client.get(f"/invoices/{third}", auth=ALICE).text
+    row = re.search(r'<tr class="mine">\s*<td>PO-2026-0101</td>(.*?)</tr>', page, re.DOTALL)
+    assert row
+    cells = re.findall(r'<td class="num">([^<]+)</td>', row.group(1))
+    assert cells[2] == "0.00" and float(cells[1]) == 2 * float(cells[0])  # billed twice the total
+    assert "over-billed by" in row.group(1) and "-" not in cells[2]
