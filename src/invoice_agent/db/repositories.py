@@ -291,6 +291,17 @@ class AuditEventRepository:
     def list_for_run(self, run_id: UUID) -> list[AuditEvent]:
         return self._many(AuditEventRow.run_id == run_id)
 
+    def open_conversations(self, drafted_step: str, closed_step: str) -> list[tuple[UUID, UUID]]:
+        """(run, invoice) of the runs that began a conversation with a supplier and did not
+        end it, oldest first."""
+        closed = select(AuditEventRow.run_id).where(AuditEventRow.step == closed_step)
+        rows = self._session.execute(
+            select(AuditEventRow.run_id, AuditEventRow.invoice_id)
+            .where(AuditEventRow.step == drafted_step, AuditEventRow.run_id.not_in(closed))
+            .distinct()
+        )
+        return [(run_id, invoice_id) for run_id, invoice_id in rows if invoice_id is not None]
+
     def _many(self, condition: ColumnElement[bool]) -> list[AuditEvent]:
         rows = self._session.scalars(
             select(AuditEventRow)

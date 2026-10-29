@@ -15,7 +15,7 @@ from contextlib import AbstractAsyncContextManager, ExitStack, asynccontextmanag
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -23,10 +23,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import ValidationError
+from mcp import StdioServerParameters
+from mcp.server.mcpserver import MCPServer
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from invoice_agent.agent.correspondence.answers import DraftReview, ReplyReview, WaitEnded
 from invoice_agent.agent.graph.checkpoint import open_checkpointer
 from invoice_agent.agent.graph.nodes import StaleApprovalError
 from invoice_agent.agent.graph.progress import Progress, run_progress
@@ -34,14 +37,22 @@ from invoice_agent.agent.graph.run import (
     CannotApproveError,
     Graph,
     NoPendingApprovalError,
+    NoPendingTaskError,
+    answer_pause,
     pending_approvals,
     pending_request,
     resume_run,
+    start_run,
 )
-from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
+from invoice_agent.agent.graph.state import ApprovalDecision, PauseKind, Verdict
 from invoice_agent.api.auth import csrf_token, csrf_valid
 from invoice_agent.api.config import WebConfig
 from invoice_agent.api.context import decision_context
+from invoice_agent.api.conversations import (
+    conversation_for_invoice,
+    open_conversations,
+    read_thread,
+)
 from invoice_agent.api.limits import BodyLimit
 from invoice_agent.config import load_settings
 from invoice_agent.db.repositories import InvoiceRepository, JobRepository
@@ -49,10 +60,14 @@ from invoice_agent.db.session import make_engine, make_session_factory, session_
 from invoice_agent.ingestion.document import ExtractionError
 from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
-from invoice_agent.presentation import safe_text
+from invoice_agent.presentation import safe_block, safe_text
+from invoice_agent.tools.errors import ToolError
+from invoice_agent.tools.mailroom import mailroom_stdio_server
+from invoice_agent.tools.mcp_connection import CallPolicy
 from invoice_agent.worker.handlers import PROCESS, process_job
 from invoice_agent.worker.main import build_agent_graph
 from invoice_agent.worker.store import LocalDocumentStore, NoDocumentStore, UploadStore
+from mailroom.schemas import MessageInfo
 
 logger = logging.getLogger("invoice_agent.api")
 
@@ -108,6 +123,8 @@ def create_app(
     documents: UploadStore | None = None,
     max_document_bytes: int = 10_000_000,
     job_attempts: int = 5,
+    mailroom: MCPServer | StdioServerParameters | None = None,
+    mailroom_policy: CallPolicy | None = None,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -119,6 +136,7 @@ def create_app(
     )
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.filters["clean"] = safe_text
+    templates.env.filters["block"] = safe_block
     templates.env.globals["anomaly_labels"] = ANOMALY_LABELS
     app.add_middleware(BodyLimit, path="/uploads", limit=max_document_bytes + UPLOAD_OVERHEAD)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -187,6 +205,7 @@ def create_app(
             "queue.html",
             user=user,
             requests=pending_approvals(graph, session_factory),
+            conversations=open_conversations(graph, session_factory),
             result=RESULTS.get(result or ""),
             can_upload=documents is not None,
             upload_csrf=csrf_token(config.secret, user, UPLOAD_SCOPE),
@@ -197,6 +216,14 @@ def create_app(
         """The queue table alone, for the page to refresh itself."""
         return render(
             request, "_queue_table.html", requests=pending_approvals(graph, session_factory)
+        )
+
+    @app.get("/fragments/conversations", response_class=HTMLResponse)
+    def conversations_fragment(request: Request, user: Approver) -> HTMLResponse:
+        return render(
+            request,
+            "_conversations_table.html",
+            conversations=open_conversations(graph, session_factory),
         )
 
     @app.get("/invoices/{invoice_id}", response_class=HTMLResponse)
@@ -286,7 +313,7 @@ def create_app(
         request: Request,
         invoice_id: UUID,
         user: Approver,
-        verdict: Annotated[Literal["approve", "reject"], Form()],
+        verdict: Annotated[Literal["approve", "reject", "reject_and_query"], Form()],
         csrf: Annotated[str, Form()],
         comment: Annotated[str, Form(max_length=1000)] = "",
     ) -> Response:
@@ -308,7 +335,144 @@ def create_app(
             return message(request, 422, str(exc))
         status = str(outcome.state.get("status", ""))
         log_event(logger, "decision", user=safe_text(user, 40), verdict=verdict, status=status)
+        if decision.verdict is Verdict.REJECT_AND_QUERY:
+            return RedirectResponse(f"/invoices/{invoice_id}/conversation", 303)
         return RedirectResponse(f"/?result={status if status in RESULTS else 'rejected'}", 303)
+
+    # --- the conversation with a supplier (ADR-0014) ------------------------------------------
+
+    def form_scope(invoice_id: UUID, form: str) -> UUID:
+        """A CSRF scope per form: a token for one cannot be used for another."""
+        return uuid5(invoice_id, form)
+
+    def thread_of(run_id: UUID) -> tuple[list[MessageInfo] | None, bool]:
+        try:
+            return read_thread(mailroom, mailroom_policy or CallPolicy(), run_id), False
+        except ToolError as exc:
+            log_event(logger, "thread_unavailable", level=logging.WARNING, error=safe_text(exc))
+            return None, True
+
+    @app.get("/invoices/{invoice_id}/conversation", response_class=HTMLResponse)
+    def conversation_page(request: Request, invoice_id: UUID, user: Approver) -> HTMLResponse:
+        found = conversation_for_invoice(graph, session_factory, invoice_id)
+        if found is None:
+            return message(request, 404, "There is no open conversation with a supplier here.")
+        conversation, status = found
+        thread, unavailable = thread_of(conversation.run_id)
+        return render(
+            request,
+            "conversation.html",
+            user=user,
+            conversation=conversation,
+            pending=status.pending or {},
+            thread=thread,
+            thread_unavailable=unavailable,
+            tokens={
+                form: csrf_token(config.secret, user, form_scope(invoice_id, form))
+                for form in ("draft", "wait", "reply", "retry")
+            },
+        )
+
+    def answered(
+        request: Request,
+        user: str,
+        invoice_id: UUID,
+        form: str,
+        csrf: str,
+        kind: PauseKind,
+        answer: Callable[[], BaseModel],
+    ) -> Response:
+        """The common part of the answers: check the form, answer the pause the run is in."""
+        if not csrf_valid(config.secret, user, form_scope(invoice_id, form), csrf):
+            log_event(logger, "csrf_refused", level=logging.WARNING, user=safe_text(user, 40))
+            return message(request, 403, "This form is not valid any more. Reload the page.")
+        found = conversation_for_invoice(graph, session_factory, invoice_id)
+        if found is None:
+            return message(request, 409, "This conversation is over.")
+        try:
+            answer_pause(graph, found[0].run_id, kind, answer())
+        except ValidationError:
+            return message(request, 422, "The answer is not valid.")
+        except NoPendingTaskError:
+            return message(request, 409, "This conversation moved on: reload the page.")
+        except ToolError as exc:
+            log_event(
+                logger, "conversation_step_failed", level=logging.WARNING, error=safe_text(exc)
+            )
+            return message(
+                request, 502, "The step failed. Nothing is lost: retry it from the page."
+            )
+        log_event(logger, "conversation_answer", user=safe_text(user, 40), kind=kind.value)
+        return RedirectResponse(f"/invoices/{invoice_id}/conversation", 303)
+
+    @app.post("/invoices/{invoice_id}/conversation/draft")
+    def answer_draft(
+        request: Request,
+        invoice_id: UUID,
+        user: Approver,
+        action: Annotated[Literal["send", "discard"], Form()],
+        csrf: Annotated[str, Form()],
+        subject: Annotated[str, Form(max_length=200)] = "",
+        body: Annotated[str, Form(max_length=5000)] = "",
+    ) -> Response:
+        def review() -> DraftReview:
+            if action == "send":  # the text in the form is the text that goes
+                return DraftReview(action="send", approver=user, subject=subject, body=body)
+            return DraftReview(action="discard", approver=user)
+
+        return answered(request, user, invoice_id, "draft", csrf, PauseKind.REVIEW_DRAFT, review)
+
+    @app.post("/invoices/{invoice_id}/conversation/wait")
+    def stop_waiting(
+        request: Request, invoice_id: UUID, user: Approver, csrf: Annotated[str, Form()]
+    ) -> Response:
+        return answered(
+            request,
+            user,
+            invoice_id,
+            "wait",
+            csrf,
+            PauseKind.AWAIT_REPLY,
+            lambda: WaitEnded(event="timeout"),
+        )
+
+    @app.post("/invoices/{invoice_id}/conversation/reply")
+    def answer_reply(
+        request: Request,
+        invoice_id: UUID,
+        user: Approver,
+        action: Annotated[Literal["resolved", "ask_again", "give_up"], Form()],
+        csrf: Annotated[str, Form()],
+        note: Annotated[str, Form(max_length=1000)] = "",
+    ) -> Response:
+        return answered(
+            request,
+            user,
+            invoice_id,
+            "reply",
+            csrf,
+            PauseKind.REVIEW_REPLY,
+            lambda: ReplyReview(action=action, approver=user, note=note.strip() or None),
+        )
+
+    @app.post("/invoices/{invoice_id}/conversation/retry")
+    def retry_step(
+        request: Request, invoice_id: UUID, user: Approver, csrf: Annotated[str, Form()]
+    ) -> Response:
+        """Continue a run whose last step failed (the mailroom was down, for instance)."""
+        if not csrf_valid(config.secret, user, form_scope(invoice_id, "retry"), csrf):
+            return message(request, 403, "This form is not valid any more. Reload the page.")
+        found = conversation_for_invoice(graph, session_factory, invoice_id)
+        if found is None:
+            return message(request, 409, "This conversation is over.")
+        try:
+            start_run(graph, run_id=found[0].run_id, document="")  # the run exists: it continues
+        except ToolError as exc:
+            log_event(
+                logger, "conversation_step_failed", level=logging.WARNING, error=safe_text(exc)
+            )
+            return message(request, 502, "The step failed again. Try later.")
+        return RedirectResponse(f"/invoices/{invoice_id}/conversation", 303)
 
     return app
 
@@ -340,5 +504,6 @@ def app_from_env() -> FastAPI:
         documents=LocalDocumentStore(root) if root else None,
         max_document_bytes=settings.limits.max_document_bytes,
         job_attempts=settings.worker.max_attempts,
+        mailroom=mailroom_stdio_server(settings.mailroom_database_url or settings.database_url),
         lifespan=lifespan,
     )

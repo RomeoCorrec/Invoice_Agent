@@ -1,0 +1,24 @@
+{% if conversations %}
+<table>
+  <thead>
+    <tr>
+      <th scope="col">Invoice</th>
+      <th scope="col">Supplier</th>
+      <th scope="col">Round</th>
+      <th scope="col">What it waits for</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in conversations %}
+    <tr>
+      <td><a href="/invoices/{{ c.invoice_id }}/conversation">{{ c.invoice_number | clean(40) }}</a></td>
+      <td>{{ c.seller | clean(40) }}</td>
+      <td>{{ c.round if c.round else '–' }}</td>
+      <td><span class="badge {{ 'review' if c.kind in ('review_draft', 'review_reply') else 'clean' }}">{{ c.label }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No conversation with a supplier is open.</p>
+{% endif %}
