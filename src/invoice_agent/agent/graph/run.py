@@ -12,6 +12,7 @@ from uuid import UUID
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph.nodes import REVIEWABLE, STEP_RECEIVE
@@ -24,6 +25,10 @@ Graph = CompiledStateGraph[AgentState, None, AgentState, AgentState]
 
 class NoPendingApprovalError(LookupError):
     """There is nothing to approve: the run is unknown, finished, or not waiting."""
+
+
+class NoPendingTaskError(LookupError):
+    """The run is unknown, finished, or not waiting for this kind of answer."""
 
 
 class CannotApproveError(ValueError):
@@ -106,6 +111,19 @@ def resume_run(
             "it can only be rejected"
         )
     graph.invoke(Command(resume=decision.model_dump(mode="json")), _config(run_id))
+    return run_status(graph, run_id)
+
+
+def answer_pause(graph: Graph, run_id: UUID, kind: PauseKind, answer: BaseModel) -> RunStatus:
+    """Answer the pause a run is in, if it is the kind of pause the answer is for.
+
+    An answer to a draft cannot resume a run that waits for a reply, nor the other way round:
+    each pause only takes the answer it asked for (ADR-0014).
+    """
+    status = run_status(graph, run_id)
+    if status.pending_kind != kind.value:
+        raise NoPendingTaskError(f"run {run_id} is not waiting for {kind.value}")
+    graph.invoke(Command(resume=answer.model_dump(mode="json")), _config(run_id))
     return run_status(graph, run_id)
 
 

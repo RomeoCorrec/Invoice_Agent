@@ -13,7 +13,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from invoice_agent.agent.graph.build import build_graph
-from invoice_agent.agent.graph.deps import AgentDeps, ExplainConfig, utc_now
+from invoice_agent.agent.graph.deps import AgentDeps, ExplainConfig, QueryConfig, utc_now
 from invoice_agent.agent.graph.run import Graph, RunStatus, start_run
 from invoice_agent.agent.graph.state import ApprovalDecision, Verdict
 from invoice_agent.config import IngestionLimits
@@ -64,6 +64,8 @@ def agent_graph(
     clock: Callable[[], datetime] = utc_now,
     ledger: MCPServer | StdioServerParameters | None = None,
     explain: ExplainConfig | None = None,
+    mailroom: MCPServer | StdioServerParameters | None = None,
+    query: QueryConfig | None = None,
 ) -> Graph:
     return build_graph(
         AgentDeps(
@@ -77,6 +79,8 @@ def agent_graph(
             clock=clock,
             ledger=ledger,
             explain=explain,
+            mailroom=mailroom,
+            query=query or QueryConfig(),
         ),
         saver,
     )
@@ -91,6 +95,8 @@ def graph_for(
     tracing: Tracing | None = None,
     ledger: MCPServer | StdioServerParameters | None = None,
     explain: ExplainConfig | None = None,
+    mailroom: MCPServer | StdioServerParameters | None = None,
+    query: QueryConfig | None = None,
 ) -> Graph:
     """A graph over the golden documents, with a stepping clock."""
     return agent_graph(
@@ -102,6 +108,8 @@ def graph_for(
         clock=SteppingClock(),
         ledger=ledger,
         explain=explain,
+        mailroom=mailroom,
+        query=query,
     )
 
 

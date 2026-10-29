@@ -109,10 +109,12 @@ graph TD;
 	request_approval(request_approval)
 	apply_decision(apply_decision)
 	post_entry(post_entry)
+	supplier_query(supplier_query)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> ingest;
 	apply_decision -.-> __end__;
 	apply_decision -.-> post_entry;
+	apply_decision -.-> supplier_query;
 	explain --> propose_entry;
 	ingest -.-> __end__;
 	ingest -.-> validate;
@@ -121,6 +123,7 @@ graph TD;
 	validate -.-> explain;
 	validate -.-> propose_entry;
 	post_entry --> __end__;
+	supplier_query --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
@@ -141,6 +144,14 @@ graph TD;
   codes, the explanation and the entry, never the document text. The run waits in the
   database, across restarts.
 - `apply_decision` approves or rejects, and records who decided in the audit log.
+- `supplier_query` is a **subgraph**, reached when the approver rejects and asks the supplier for
+  a correction ([ADR-0014](docs/adr/0014-supplier-correspondence-subgraph.md)). The message is
+  written from a template (the model may polish it, the code checks it); a person reads, edits
+  and sends it; a typed idempotent tool sends it to the contact on file (never an address from
+  the document); the run then waits, for days if need be, for the reply or the deadline; a person
+  reads the reply (sender not the contact, bank details removed, injection suspected are
+  flagged) and decides what it settles. One reminder or follow-up at most, every step audited,
+  nothing sent without a person.
 - `post_entry` runs only after an approval, with the entry the reviewer saw, through the MCP
   ledger's idempotent tool (one key per invoice). A refusal fails the invoice with the ledger's
   code; an outage is retried; a crash between the ledger and the database replays into a
