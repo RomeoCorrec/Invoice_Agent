@@ -128,3 +128,9 @@ main.wide { max-width: 100rem; }
 .copies li { margin: 0.35rem 0; }
 table.orders tr.mine td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
 .warn { color: var(--bad); }
+
+.decision input { width: 100%; font: inherit; padding: 0.5rem; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 0.75rem; }
+.thread { list-style: none; padding: 0; }
+.thread .message { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 0.25rem 1rem; margin: 0.75rem 0; }
+.thread .message.in { border-left: 4px solid var(--accent); }
+.thread pre { white-space: pre-wrap; font: inherit; margin: 0 0 0.75rem; }

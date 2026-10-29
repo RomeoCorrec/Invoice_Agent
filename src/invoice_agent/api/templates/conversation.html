@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Supplier · {{ conversation.invoice_number | clean(40) }}{% endblock %}
+{% block content %}
+<p><a href="/">← Waiting for a decision</a></p>
+<h1>Conversation with {{ conversation.seller | clean(60) }}</h1>
+<p class="muted">About invoice {{ conversation.invoice_number | clean(40) }}{% if conversation.round %} · message {{ conversation.round }}{% endif %}</p>
+<p class="notice" role="status">{{ conversation.label }}.</p>
+
+{% if conversation.kind == 'review_draft' %}
+<h2>The message to send</h2>
+<p class="muted">To {{ pending.to | clean(120) }} (the address on file for this supplier). {% if pending.source == 'template' %}Written from a template{% if pending.fallback_reason %} ({{ pending.fallback_reason | clean(80) }}){% endif %}.{% else %}Written by the model and checked by rules.{% endif %} Nothing leaves before you send it.</p>
+{% if pending.problems %}
+<p class="warning">Rules found problems in an earlier draft: {% for p in pending.problems %}{{ p | clean(80) }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+{% endif %}
+<form method="post" action="/invoices/{{ conversation.invoice_id }}/conversation/draft" class="decision">
+  <input type="hidden" name="csrf" value="{{ tokens.draft }}">
+  <label for="subject">Subject</label>
+  <input id="subject" name="subject" maxlength="200" value="{{ pending.subject | clean(200) }}" required>
+  <label for="body">Message</label>
+  <textarea id="body" name="body" rows="14" maxlength="5000" required>{{ pending.body | block(5000) }}</textarea>
+  <div class="actions">
+    <button type="submit" name="action" value="send" class="approve">Send</button>
+    <button type="submit" name="action" value="discard" class="reject" formnovalidate>Do not send</button>
+  </div>
+</form>
+
+{% elif conversation.kind == 'await_reply' %}
+<form method="post" action="/invoices/{{ conversation.invoice_id }}/conversation/wait" class="decision">
+  <input type="hidden" name="csrf" value="{{ tokens.wait }}">
+  <p>The supplier has not answered yet. The wait also ends by itself after the deadline, and a reminder is then proposed.</p>
+  <div class="actions"><button type="submit">Stop waiting now</button></div>
+</form>
+
+{% elif conversation.kind == 'review_reply' %}
+<h2>The supplier answered</h2>
+{% if pending.from_contact is false %}<p class="warning">This reply does not come from the address on file for the supplier. Do not trust it.</p>{% endif %}
+{% if pending.iban_redacted %}<p class="warning">The reply carried bank details: they were removed.</p>{% endif %}
+{% if pending.injection_suspected %}<p class="warning">The reply contains instructions aimed at an AI. It is shown as text, nothing obeys it.</p>{% endif %}
+<form method="post" action="/invoices/{{ conversation.invoice_id }}/conversation/reply" class="decision">
+  <input type="hidden" name="csrf" value="{{ tokens.reply }}">
+  <label for="note">Note (optional)</label>
+  <textarea id="note" name="note" rows="3" maxlength="1000"></textarea>
+  <div class="actions">
+    <button type="submit" name="action" value="resolved" class="approve">It settles the matter</button>
+    <button type="submit" name="action" value="ask_again">Ask again</button>
+    <button type="submit" name="action" value="give_up" class="reject">Give up</button>
+  </div>
+</form>
+
+{% else %}
+<form method="post" action="/invoices/{{ conversation.invoice_id }}/conversation/retry" class="decision">
+  <input type="hidden" name="csrf" value="{{ tokens.retry }}">
+  <p>The last step did not finish (the mailroom may have been unavailable). The run is kept as it was.</p>
+  <div class="actions"><button type="submit">Retry</button></div>
+</form>
+{% endif %}
+
+<h2>The conversation</h2>
+{% if thread_unavailable %}
+<p class="warning">The mailroom cannot be reached: the messages cannot be shown now.</p>
+{% elif thread is none %}
+<p class="muted">The mailroom is not connected to this server.</p>
+{% elif thread %}
+<ol class="thread">
+  {% for m in thread %}
+  <li class="message {{ m.direction }}">
+    <p class="muted">{{ 'Sent to' if m.direction == 'out' else 'Received from' }} {{ m.address | clean(120) }} · {{ m.created_at.strftime('%Y-%m-%d %H:%M') }} UTC{% if m.direction == 'in' and m.from_contact is false %} · <strong class="warn">not the address on file</strong>{% endif %}</p>
+    <p><strong>{{ m.subject | clean(200) }}</strong></p>
+    <pre>{{ m.body | block(5000) }}</pre>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="muted">No message yet.</p>
+{% endif %}
+{% endblock %}

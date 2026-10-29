@@ -16,4 +16,8 @@
 <div id="queue" hx-get="/fragments/queue" hx-trigger="every 5s" hx-swap="innerHTML">
 {% include "_queue_table.html" %}
 </div>
+<h2>Conversations with suppliers</h2>
+<div id="conversations" hx-get="/fragments/conversations" hx-trigger="every 5s" hx-swap="innerHTML">
+{% include "_conversations_table.html" %}
+</div>
 {% endblock %}

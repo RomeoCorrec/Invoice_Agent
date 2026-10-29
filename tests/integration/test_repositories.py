@@ -325,7 +325,7 @@ def test_audit_events_round_trip_in_chronological_order(session: Session) -> Non
 
 def test_audit_repository_exposes_no_way_to_modify_events() -> None:
     public = {name for name in dir(AuditEventRepository) if not name.startswith("_")}
-    assert public == {"append", "list_for_invoice", "list_for_run"}
+    assert public == {"append", "list_for_invoice", "list_for_run", "open_conversations"}
 
 
 # --- sessions and transactions -----------------------------------------------------------

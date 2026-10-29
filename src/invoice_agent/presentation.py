@@ -15,3 +15,13 @@ def safe_text(value: object, limit: int = 60) -> str:
     """
     text = "".join(ch if ch.isprintable() else "\N{REPLACEMENT CHARACTER}" for ch in str(value))
     return text[:limit]
+
+
+def safe_block(value: object, limit: int = 4000) -> str:
+    """Like ``safe_text`` for a message of several lines: line breaks stay, nothing else
+    that is not printable does."""
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    text = "".join(
+        ch if ch == "\n" or ch.isprintable() else "\N{REPLACEMENT CHARACTER}" for ch in text
+    )
+    return text[:limit]
