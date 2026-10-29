@@ -28,12 +28,14 @@ from langgraph.types import interrupt
 from invoice_agent.agent.correspondence.answers import DraftReview, ReplyReview, WaitEnded
 from invoice_agent.agent.correspondence.drafting import make_draft
 from invoice_agent.agent.correspondence.facts import build_facts
+from invoice_agent.agent.correspondence.jobs import deadline_job
 from invoice_agent.agent.graph.deps import AgentDeps
 from invoice_agent.agent.graph.nodes import STEP_VALIDATE
 from invoice_agent.agent.graph.state import PauseKind
 from invoice_agent.db.repositories import (
     AuditEventRepository,
     InvoiceRepository,
+    JobRepository,
     SupplierRepository,
 )
 from invoice_agent.db.session import session_scope
@@ -283,6 +285,7 @@ def make_send_query(deps: AgentDeps) -> QNode:
             (ActorType.TOOL, MAILROOM_ACTOR),
             {"message_id": str(sent.message_id), "replayed": sent.replayed},
         )
+        _schedule_deadline(deps, state)
         return {"sent": sent.model_dump(mode="json"), "query": _where(state, SENT)}
 
     return send_query
@@ -294,6 +297,20 @@ async def _send(deps: AgentDeps, request: SendRequest) -> SentMessage:
         deps.mailroom, policy=deps.mailroom_policy, tracing=deps.tracing
     ) as connection:
         return await MailroomWriter(connection).send_message(request)
+
+
+def _schedule_deadline(deps: AgentDeps, state: QueryState) -> None:
+    """Queue the job that ends the wait for this message (once: its key names run and round)."""
+    now = deps.clock()
+    with session_scope(deps.session_factory) as session:
+        JobRepository(session).enqueue(
+            deadline_job(
+                UUID(state["run_id"]),
+                state["round"],
+                run_after=now + deps.query.reply_deadline,
+                now=now,
+            )
+        )
 
 
 def make_await_reply(deps: AgentDeps) -> QNode:

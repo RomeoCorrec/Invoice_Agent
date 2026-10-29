@@ -8,7 +8,7 @@ import argparse
 import logging
 import os
 import socket
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -16,9 +16,11 @@ from typing import Any
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from sqlalchemy.orm import Session, sessionmaker
 
+from invoice_agent.agent.correspondence.drafting import build_query_config
+from invoice_agent.agent.correspondence.jobs import poll_bucket, poll_job
 from invoice_agent.agent.graph.build import build_graph
 from invoice_agent.agent.graph.checkpoint import open_checkpointer
-from invoice_agent.agent.graph.deps import AgentDeps, ExplainConfig
+from invoice_agent.agent.graph.deps import AgentDeps, ExplainConfig, QueryConfig
 from invoice_agent.agent.graph.explain_node import build_explain_config
 from invoice_agent.agent.graph.run import Graph
 from invoice_agent.config import ConfigError, Settings, load_settings
@@ -30,6 +32,7 @@ from invoice_agent.llm.factory import build_extractor
 from invoice_agent.observability.logging import configure_logging, log_event
 from invoice_agent.observability.tracing import Tracing
 from invoice_agent.tools.ledger import ledger_stdio_server
+from invoice_agent.tools.mailroom import mailroom_stdio_server
 from invoice_agent.worker.handlers import HANDLERS, JobContext, on_job_dead, process_job
 from invoice_agent.worker.runner import Worker
 from invoice_agent.worker.store import DocumentStore, LocalDocumentStore
@@ -59,6 +62,7 @@ def build_agent_graph(
     saver: BaseCheckpointSaver[Any],
     store: DocumentStore | None = None,
     explain: ExplainConfig | None = None,
+    query: QueryConfig | None = None,
 ) -> Graph:
     """The agent graph wired with the production dependencies (shared by the worker and the CLI).
 
@@ -75,9 +79,31 @@ def build_agent_graph(
             tracing=tracing,
             ledger=ledger_stdio_server(settings.ledger_database_url or settings.database_url),
             explain=explain,
+            mailroom=mailroom_stdio_server(settings.mailroom_database_url or settings.database_url),
+            query=query
+            or QueryConfig(reply_deadline=timedelta(days=settings.mail.reply_deadline_days)),
         ),
         saver,
     )
+
+
+def start_mail_poll(factory: sessionmaker[Session], settings: Settings) -> None:
+    """Make sure the chain of polls for replies is running (ADR-0014).
+
+    Each poll queues the next one, so one is enough to start; its key names the time slot, so
+    any number of workers starting together queue it once.
+    """
+    now = datetime.now(UTC)
+    interval = settings.mail.poll_interval_s
+    with session_scope(factory) as session:
+        JobRepository(session).enqueue(
+            poll_job(
+                poll_bucket(now, interval),
+                interval_s=interval,
+                now=now,
+                max_attempts=settings.worker.max_attempts,
+            )
+        )
 
 
 def build_worker(
@@ -95,11 +121,23 @@ def build_worker(
         extractor,
         saver,
         explain=build_explain_config(settings, tracing),
+        query=build_query_config(settings, tracing),
     )
 
-    def context_for(session: Session, now: datetime) -> JobContext:
-        return JobContext(session=session, now=now, tracing=tracing, agent=graph)
+    mailroom = mailroom_stdio_server(settings.mailroom_database_url or settings.database_url)
 
+    def context_for(session: Session, now: datetime) -> JobContext:
+        return JobContext(
+            session=session,
+            now=now,
+            tracing=tracing,
+            agent=graph,
+            mailroom=mailroom,
+            mail=settings.mail,
+            max_attempts=settings.worker.max_attempts,
+        )
+
+    start_mail_poll(factory, settings)
     return Worker(
         factory,
         worker_id=f"{socket.gethostname()}-{os.getpid()}",
