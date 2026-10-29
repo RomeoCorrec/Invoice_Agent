@@ -108,3 +108,38 @@ def test_an_iban_dressed_as_a_uuid_is_still_found() -> None:
     hidden = uuid_shaped_iban()
     assert contains_iban(hidden)
     assert "[IBAN redacted]" in redact_ibans(hidden)
+
+
+@pytest.mark.parametrize(
+    "glued",
+    [
+        f"IBAN{IBAN}",  # the label runs into the number
+        f"ref12{IBAN}",  # digits before it
+        f"x{IBAN}y",  # letters on both sides
+        f"IBAN:{IBAN}",
+        f"{IBAN[:4]} {IBAN[4:]}ref",
+    ],
+)
+def test_an_iban_glued_to_the_text_around_it_is_found_and_redacted(glued: str) -> None:
+    assert contains_iban(glued)
+    assert IBAN[4:] not in redact_ibans(glued).replace(" ", "")
+
+
+def test_gluing_is_only_recognised_for_countries_whose_length_is_known() -> None:
+    """For another country every length would have to be tried: too many false alarms."""
+    latvian = "LV80BANK0000435195001"  # a valid Latvian IBAN (21 characters)
+    assert contains_iban(latvian)
+    assert not contains_iban(f"ref12{latvian}")
+
+
+def test_random_identifiers_do_not_pass_for_ibans_much_more_often_than_before() -> None:
+    """The looser start must not turn hashes and tokens into IBANs by the dozen."""
+    import random
+    import secrets
+
+    rng = random.Random(11)
+    hashes = [f"{rng.getrandbits(256):064x}" for _ in range(5000)]
+    tokens = [secrets.token_urlsafe(48) for _ in range(5000)]
+    for values in (hashes, tokens):
+        rate = sum(contains_iban(value) for value in values) / len(values)
+        assert rate < 0.025  # about 1 % before, 1.2 % with the glued start

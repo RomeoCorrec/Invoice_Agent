@@ -21,7 +21,14 @@ _COUNTRY_LENGTHS = {
     "CH": 21, "LU": 20, "PT": 25, "IE": 22, "AT": 20,
 }  # fmt: skip
 _MIN_LENGTH, _MAX_LENGTH = 15, 34
-_START = re.compile(r"(?<![A-Z0-9])[A-Z]{2}\d{2}", re.IGNORECASE)
+# An IBAN starts after anything that is not a letter or a digit. It may also be glued to what
+# comes before it ("IBANFR76...", "ref12FR76...", common in text pulled out of a PDF), but then
+# only for a country whose length is known: one length to try instead of twenty keeps the
+# chance that a random identifier passes the check at about 1 in 100 per candidate.
+_START = re.compile(
+    r"(?<![A-Z0-9])[A-Z]{2}\d{2}|(?<=[A-Z0-9])(?:" + "|".join(_COUNTRY_LENGTHS) + r")\d{2}",
+    re.IGNORECASE,
+)
 _SEPARATORS = "-._"
 
 

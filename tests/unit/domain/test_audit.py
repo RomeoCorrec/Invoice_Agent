@@ -121,3 +121,20 @@ def test_the_name_of_a_file_that_a_person_chose_is_still_checked_for_an_iban() -
     for key in ("document", "uri"):
         for value in (f"{iban}.pdf", f"uploads/{iban}.pdf", f"uploads/{iban}-copy.pdf"):
             assert iban not in str(redact_payload({key: value}))
+
+
+def test_the_digest_of_a_source_document_is_kept_exactly() -> None:
+    """About 1 % of random digests contain a fragment that passes the IBAN check."""
+    import random
+
+    rng = random.Random(5)
+    for _ in range(20_000):
+        payload = {"sha256": f"{rng.getrandbits(256):064x}", "size": 1234}
+        assert redact_payload(payload) == payload
+        assert make_event(payload).payload == payload
+
+
+def test_a_value_under_the_digest_key_must_have_the_shape_of_a_digest() -> None:
+    iban = "FR7699053965263585803695442"
+    for value in (iban, f"x{iban}", "a" * 63, "A" * 64):
+        assert iban not in str(redact_payload({"sha256": value}))
