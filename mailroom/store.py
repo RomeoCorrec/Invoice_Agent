@@ -19,11 +19,13 @@ import re
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, Connection, Engine, Select, select
+from pydantic import TypeAdapter, ValidationError
+from sqlalchemy import Column, Connection, Engine, Select, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 
 from invoice_agent.domain.iban import contains_iban, redact_ibans
+from invoice_agent.domain.types import EmailAddress
 from mailroom import tables
 from mailroom.schemas import (
     MAX_INBOUND_BODY,
@@ -37,6 +39,7 @@ from mailroom.schemas import (
 )
 
 SUBJECT_LIMIT = 200
+_SENDER = TypeAdapter(EmailAddress)
 
 
 def request_fingerprint(request: SendRequest) -> str:
@@ -91,6 +94,7 @@ class MailroomStore:
                     ErrorCode.BANK_DETAILS_IN_MESSAGE,
                     "a message must not carry bank details",
                 )
+            self._lock_thread(connection, request.thread_id)
             owner = self._thread_supplier(connection, request.thread_id)
             if owner is not None and owner != request.supplier_siren:
                 raise MailroomRefusal(
@@ -133,14 +137,29 @@ class MailroomStore:
         self, thread_id: UUID, from_address: str, subject: str, body: str
     ) -> MessageInfo:
         """Store a reply to a thread we wrote in. Bank details are removed first."""
-        if len(body) > MAX_INBOUND_BODY:
+        too_long = MailroomRefusal(
+            ErrorCode.INVALID_REQUEST, f"a reply is limited to {MAX_INBOUND_BODY} characters"
+        )
+        if len(body) > MAX_INBOUND_BODY:  # before any work is done on it
+            raise too_long
+        try:
+            sender = _SENDER.validate_python(from_address)
+        except ValidationError:
             raise MailroomRefusal(
-                ErrorCode.INVALID_REQUEST, f"a reply is limited to {MAX_INBOUND_BODY} characters"
-            )
+                ErrorCode.INVALID_REQUEST, "the sender must be one well-formed address"
+            ) from None
         clean_subject = re.sub(r"\s+", " ", subject).strip()[:SUBJECT_LIMIT] or "(no subject)"
         redacted_subject, redacted_body = redact_ibans(clean_subject), redact_ibans(body)
-        iban_redacted = (redacted_subject, redacted_body) != (clean_subject, body)
+        redacted_sender = redact_ibans(sender)
+        if len(redacted_body) > MAX_INBOUND_BODY:  # redaction folds the text: some characters grow
+            raise too_long
+        iban_redacted = (redacted_subject, redacted_body, redacted_sender) != (
+            clean_subject,
+            body,
+            sender,
+        )
         with self._engine.begin() as connection:
+            self._lock_thread(connection, thread_id)
             supplier = self._thread_supplier(connection, thread_id)
             if supplier is None:
                 raise MailroomRefusal(
@@ -153,7 +172,7 @@ class MailroomStore:
                     thread_id=thread_id,
                     direction="in",
                     supplier_siren=supplier,
-                    address=from_address[:254],
+                    address=redacted_sender,
                     subject=redacted_subject[:SUBJECT_LIMIT],
                     body=redacted_body,
                     iban_redacted=iban_redacted,
@@ -164,6 +183,18 @@ class MailroomStore:
         return stored[0]
 
     # --- helpers ---------------------------------------------------------------------------
+
+    @staticmethod
+    def _lock_thread(connection: Connection, thread_id: UUID) -> None:
+        """Serialise the writers of one thread until the end of the transaction.
+
+        Who owns a thread is decided by its first message: two first messages for two
+        suppliers must not both be accepted because each looked before the other wrote.
+        """
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:thread, 0))"),
+            {"thread": str(thread_id)},
+        )
 
     @staticmethod
     def _order() -> tuple[Column[datetime], Column[UUID]]:

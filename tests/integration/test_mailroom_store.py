@@ -121,6 +121,30 @@ def test_eight_concurrent_sends_of_one_request_write_one_message(
     assert count(engine) == 1
 
 
+def test_two_first_messages_of_one_thread_for_two_suppliers_are_not_both_accepted(
+    store: MailroomStore, engine: Engine
+) -> None:
+    """Who owns a thread is decided by its first message: look-then-write must not race."""
+    other_address = demo_contact_address("Loca'Pro Matériel SAS")
+    for _ in range(12):
+        thread = uuid4()
+        mine = request(thread_id=thread)
+        theirs = request(thread_id=thread, supplier_siren=OTHER_SIREN, to=other_address)
+
+        def attempt(asked: SendRequest) -> str:
+            try:
+                store.send_message(asked)
+            except MailroomRefusal as refusal:
+                return refusal.code.value
+            return "sent"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = sorted(pool.map(attempt, [mine, theirs]))
+        assert outcomes == ["sent", "thread_of_another_supplier"]
+        assert len({m.supplier_siren for m in store.get_thread(thread)}) == 1
+    assert count(engine) == 12
+
+
 def test_the_recipient_must_be_the_contact_on_file_whatever_the_case(
     store: MailroomStore,
 ) -> None:
@@ -170,6 +194,43 @@ def test_a_thread_belongs_to_one_supplier(store: MailroomStore) -> None:
 def test_a_reply_needs_a_thread_we_wrote_in(store: MailroomStore) -> None:
     with refused(ErrorCode.UNKNOWN_THREAD):
         store.receive_message(uuid4(), ADDRESS, "Re:", "Bonjour")
+
+
+@pytest.mark.parametrize(
+    "sender",
+    ["", "not an address", "a@b.example\nBcc: x@evil.example", "one@x.example, two@x.example"],
+)
+def test_a_reply_needs_one_well_formed_sender(store: MailroomStore, sender: str) -> None:
+    asked = request()
+    store.send_message(asked)
+    with refused(ErrorCode.INVALID_REQUEST):
+        store.receive_message(asked.thread_id, sender, "Re:", "Bonjour")
+    assert [m.direction for m in store.get_thread(asked.thread_id)] == ["out"]
+
+
+def test_bank_details_hidden_in_the_sender_are_removed_too(
+    store: MailroomStore, engine: Engine
+) -> None:
+    asked = request()
+    store.send_message(asked)
+    reply = store.receive_message(asked.thread_id, f"{FULL_IBAN}@evil.example", "Re:", "ok")
+    assert reply.iban_redacted and reply.from_contact is False
+    assert FULL_IBAN not in reply.address
+    with engine.connect() as connection:
+        addresses = connection.execute(select(tables.messages.c.address)).scalars().all()
+    assert all(FULL_IBAN not in value for value in addresses)
+
+
+def test_the_size_limit_applies_to_what_is_stored_not_only_to_what_arrived(
+    store: MailroomStore,
+) -> None:
+    """Folding the text grows some characters (one of them becomes eighteen)."""
+    asked = request()
+    store.send_message(asked)
+    small_on_arrival = chr(0xFDFA) * 15_000  # 15 000 characters, far more once folded
+    with refused(ErrorCode.INVALID_REQUEST):
+        store.receive_message(asked.thread_id, ADDRESS, "Re:", small_on_arrival)
+    assert [m.direction for m in store.get_thread(asked.thread_id)] == ["out"]
 
 
 def test_a_reply_from_the_contact_is_stored_and_marked_as_genuine(store: MailroomStore) -> None:
