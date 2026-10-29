@@ -31,7 +31,7 @@ model any power it does not have today.
 3. **Waits are durable and timed by the job queue**, not by a sleeping process: an
    expiry is a job with `run_after` (ADR-0005) that resumes the run with `Command(resume=...)`,
    as does the arrival of a reply. At most two rounds and one reminder.
-4. **The outbound action is a typed, idempotent tool on a second MCP server** (`mailbox`, a
+4. **The outbound action is a typed, idempotent tool on a second MCP server** (`mailroom`, a
    simulated provider like the ledger is a simulated accounting system). The recipient comes
    from the supplier referential, never from the document and never from the model, and the
    server refuses any recipient that is not on file.
