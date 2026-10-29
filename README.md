@@ -176,6 +176,15 @@ served with a policy that lets only the application's own page frame it. The que
 every few seconds with [htmx](docs/third-party.md) (a vendored, hash-pinned file, no CDN) and
 still works without JavaScript.
 
+The page also shows what the invoice cannot say about itself: the **other copies** of the
+same invoice (same file, or same number from the same seller) with their status and links to
+their document and, when they are still waiting, to their own page; and the **orders of the
+supplier** with what is billed and what is left, the quoted one highlighted, a warning when
+the number quoted on the invoice is not one of them. Both come from the database, never from the
+document.
+
+![An invoice flagged as a duplicate: the other copy, the supplier's orders and the PDF](docs/images/decision-context.jpg)
+
 ```bash
 uv run python -m invoice_agent.api hash-password     # then: APPROVERS=alice=<hash> in .env
 uv run python -m invoice_agent.api secret            # WEB_SECRET=<value> in .env
