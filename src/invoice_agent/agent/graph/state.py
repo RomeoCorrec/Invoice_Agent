@@ -35,6 +35,8 @@ class PauseKind(StrEnum):
 class Verdict(StrEnum):
     APPROVE = "approve"
     REJECT = "reject"
+    REJECT_AND_QUERY = "reject_and_query"
+    """Reject, and ask the supplier for a correction (the correspondence subgraph)."""
 
 
 class ApprovalDecision(BaseModel):
@@ -72,6 +74,8 @@ class AgentState(TypedDict, total=False):
     """Why no entry could be built (an ``EntryBlocked`` dumped to JSON)."""
     decision: dict[str, Any]
     """An ``ApprovalDecision`` dumped to JSON."""
+    query: dict[str, Any]
+    """Where the correspondence with the supplier stands: its status, round and thread."""
 
 
 def run_id_of(state: AgentState) -> UUID:
