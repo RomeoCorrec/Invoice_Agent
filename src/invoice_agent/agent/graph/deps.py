@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from mcp import StdioServerParameters
 from mcp.server.mcpserver import MCPServer
@@ -42,6 +42,8 @@ class QueryConfig:
     """Without a provider and a prompt the template is the draft."""
     max_rounds: int = 2
     """Messages in one conversation: the first, and one reminder or follow-up."""
+    reply_deadline: timedelta = timedelta(days=3)
+    """How long to wait for a reply before the wait ends."""
 
 
 @dataclass(frozen=True)
