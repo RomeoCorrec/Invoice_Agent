@@ -258,13 +258,14 @@ uv run --env-file .env python -m evals.run --suite explain --yes --max-cost 0.25
 uv run python -m evals.rescore evals/results/<run>.json --report docs/evals/explain.md
 ```
 
-First measurement (Haiku 5.5, 8 invoices with anomalies, 0.005 USD): every anomaly covered, no
-invented code, no figure outside the case or the tool results (a gap between two amounts of
-the case counts as grounded), tools used in 3 cases out of 8 and always read-only, the
-injection case flagged as a risk without following it, p50 latency 3.9 s. The model's texts
-are in [docs/evals/explain.md](docs/evals/explain.md). The thresholds are in
-[evals/thresholds.yaml](evals/thresholds.yaml), set a little under this measurement; a run (or a
-rescoring) below one of them exits with code 1.
+Measurement (Haiku 5.5, 12 invoices with anomalies, 0.008 USD; a 13th is refused before the
+model, as in production): every anomaly covered, no invented code, no figure outside the case
+or the tool results (a gap between two amounts of the case counts as grounded), tools used in
+4 cases out of 12 and always read-only, both injection cases flagged as a risk without
+following them, p50 latency 3.9 s. The first measurement, on 8 invoices, gave the same
+rates. The model's texts are in [docs/evals/explain.md](docs/evals/explain.md). The
+thresholds are in [evals/thresholds.yaml](evals/thresholds.yaml), set a little under the
+first measurement; a run (or a rescoring) below one of them exits with code 1.
 
 ## The ledger and its tools
 
