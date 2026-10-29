@@ -151,21 +151,32 @@ PAGE = MAX_LISTED
 
 
 async def _replies_since(context: JobContext, since: datetime) -> list[MessageInfo]:
-    """Every reply received after ``since``, page by page (bounded)."""
+    """Every reply received after ``since``, page by page (at most ``PAGES`` pages).
+
+    The listing is "after a moment", so the next page starts one microsecond before the last
+    reply of this one: replies that share its exact time are not skipped, and the ones seen
+    twice are dropped by id. The bound is ``PAGES * PAGE`` replies in the window; reaching it
+    is logged, never silent (a reply beyond it would wait for a later, shorter window).
+    """
     assert context.mailroom is not None
-    found: list[MessageInfo] = []
+    found: dict[UUID, MessageInfo] = {}
+    capped = False
     async with MailroomConnection(
         context.mailroom, policy=context.mailroom_policy, tracing=context.tracing
     ) as connection:
         reader = MailroomReader(connection)
-        cursor: datetime | None = since
-        for _ in range(PAGES):
+        cursor: datetime = since
+        for page_number in range(PAGES):
             page = await reader.list_inbound(since=cursor, limit=PAGE)
-            found.extend(page)
-            if len(page) < PAGE:
+            fresh = [message for message in page if message.id not in found]
+            found.update((message.id, message) for message in fresh)
+            if len(page) < PAGE or not fresh:
                 break
-            cursor = page[-1].created_at
-    return found
+            cursor = page[-1].created_at - timedelta(microseconds=1)
+            capped = page_number == PAGES - 1
+    if capped:
+        log_event(logger, "mail_poll_page_cap", level=logging.WARNING, replies=len(found))
+    return list(found.values())
 
 
 def handle_mail_poll(job: Job, context: JobContext) -> None:

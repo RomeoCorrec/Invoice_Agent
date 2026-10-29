@@ -362,3 +362,71 @@ def test_a_run_waiting_for_a_reply_survives_a_dead_worker_between_poll_and_reply
     second = worker_for(factory, graph, server, clock)  # a different worker finishes the story
     assert second.run_once()
     assert run_status(graph, run.run_id).pending_kind == "review_reply"
+
+
+def insert_reply(engine: Engine, run: RunStatus, at: datetime, subject: str) -> str:
+    """A reply stored with an exact time (the store itself stamps the moment it receives)."""
+    from uuid import uuid4
+
+    message_id = uuid4()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO mailroom.messages (id, thread_id, direction, supplier_siren, "
+                "address, subject, body, created_at) SELECT :id, :thread, 'in', supplier_siren, "
+                ":address, :subject, 'ok', :at FROM mailroom.messages WHERE thread_id = :thread "
+                "LIMIT 1"
+            ),
+            {
+                "id": message_id,
+                "thread": run.run_id,
+                "address": ADDRESS,
+                "subject": subject,
+                "at": at,
+            },
+        )
+    return f"reply:{message_id}"
+
+
+def test_replies_that_share_the_exact_time_of_a_page_boundary_are_not_skipped(
+    graph: Graph,
+    factory: sessionmaker[Session],
+    documents: Path,
+    worker: Worker,
+    engine: Engine,
+    clock: Clock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("invoice_agent.worker.handlers.PAGE", 2)
+    run = waiting_for_a_reply(graph, factory, documents)
+    t1, t2 = START + timedelta(minutes=1), START + timedelta(minutes=2)
+    keys = {
+        insert_reply(engine, run, t1, "first"),
+        insert_reply(engine, run, t2, "second"),
+        insert_reply(engine, run, t2, "third"),  # the same instant as the one before it
+    }
+    start_polling(factory, clock)
+    worker.run_until_idle()
+    assert {j["idempotency_key"] for j in jobs(engine, "query_reply")} == keys
+
+
+def test_reaching_the_page_limit_is_logged_and_never_silent(
+    graph: Graph,
+    factory: sessionmaker[Session],
+    documents: Path,
+    worker: Worker,
+    engine: Engine,
+    clock: Clock,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr("invoice_agent.worker.handlers.PAGE", 2)
+    monkeypatch.setattr("invoice_agent.worker.handlers.PAGES", 2)
+    run = waiting_for_a_reply(graph, factory, documents)
+    for n in range(5):
+        insert_reply(engine, run, START + timedelta(minutes=n + 1), f"reply {n}")
+    start_polling(factory, clock)
+    with caplog.at_level("WARNING", logger="invoice_agent.worker"):
+        worker.run_until_idle()
+    assert "mail_poll_page_cap" in caplog.text
+    assert len(jobs(engine, "query_reply")) == 3  # two pages of two, one overlap seen twice
