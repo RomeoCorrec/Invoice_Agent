@@ -64,6 +64,7 @@ src/invoice_agent/
   worker/          # Job runner
   observability/   # Langfuse setup, logging, cost tracking
 ledger/            # Mock accounting service + MCP server (separate package)
+mailroom/          # Simulated mail provider + MCP server (separate package, ADR-0014)
 evals/             # Golden dataset, generators, eval runner, metrics
 infra/terraform/   # AWS infrastructure
 docs/adr/          # Architecture Decision Records
@@ -94,6 +95,9 @@ uv run python -m invoice_agent.agent show <invoice-id>    # the entry that would
 uv run python -m invoice_agent.agent approve <invoice-id> --by <name>   # or: reject
 uv run python -m ledger seed                    # load the reference data into the ledger schema
 uv run python -m ledger                         # serve the ledger over stdio (clients start it themselves)
+uv run python -m mailroom seed                  # load the supplier contacts the mailroom may write to
+uv run python -m mailroom                       # serve the mailroom over stdio (clients start it themselves)
+uv run python -m mailroom deliver --thread <id> --from <address> --body "..."   # a supplier's reply arrives
 ```
 
 Keep this section up to date when commands change.

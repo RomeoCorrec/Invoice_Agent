@@ -276,6 +276,26 @@ rates. The model's texts are in [docs/evals/explain.md](docs/evals/explain.md). 
 thresholds are in [evals/thresholds.yaml](evals/thresholds.yaml), set a little under the
 first measurement; a run (or a rescoring) below one of them exits with code 1.
 
+## The mailroom
+
+The simulated mail provider the supplier correspondence will write through
+([ADR-0014](docs/adr/0014-supplier-correspondence-subgraph.md)), kept apart like the ledger: its
+own Postgres schema (`mailroom`) and an MCP server that is the only way in.
+
+```bash
+uv run python -m mailroom seed      # one contact address per supplier of the reference data
+uv run python -m mailroom deliver --thread <id> --from <address> --body "..."   # a reply arrives
+```
+
+Three read tools (the contact on file, a conversation, the replies received) and one write
+tool, `send_message`, idempotent: sending twice with the same key writes once. What it refuses
+is the point of the design: a recipient that is not the address on file for the supplier (so
+neither a document nor a model can choose where a message goes), bank details in the text, and a
+thread that belongs to another supplier. There is no tool to *receive*: a reply enters through
+the provider's side, with its bank details removed and its sender compared with the contact, so
+an agent cannot forge one. Messages are append-only. Addresses of the demo data end in
+`.example`, a domain nobody can register.
+
 ## The ledger and its tools
 
 The accounting system the agent posts to is a mock, kept apart from the agent on purpose: its

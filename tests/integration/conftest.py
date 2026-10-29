@@ -61,7 +61,7 @@ def _empty_tables(request: pytest.FixtureRequest) -> Iterator[None]:
         tables = connection.execute(
             text(
                 "SELECT string_agg(quote_ident(schemaname) || '.' || quote_ident(tablename), ', ') "
-                "FROM pg_tables WHERE schemaname IN ('public', 'ledger') "
+                "FROM pg_tables WHERE schemaname IN ('public', 'ledger', 'mailroom') "
                 "AND tablename <> 'alembic_version'"
             )
         ).scalar_one()
