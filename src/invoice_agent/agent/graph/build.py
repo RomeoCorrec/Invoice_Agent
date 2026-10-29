@@ -8,6 +8,7 @@
 until a decision resumes it. Only an approval leads to ``post_entry``.
 """
 
+import functools
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -60,6 +61,10 @@ def _brief(value: Any) -> Any:
 def traced(name: str, node: Node, deps: AgentDeps) -> Node:
     """One Langfuse span per node, in the invoice's trace, with what went in and what came out."""
 
+    # LangGraph reads the annotation of the first parameter to decide which keys of the state a
+    # node receives: the wrapper must look like the node it wraps, or a node of a subgraph is
+    # handed only the keys of the parent's state and loses its own.
+    @functools.wraps(node)
     def run(state: AgentState) -> dict[str, Any]:
         tracing = deps.tracing
         # Inside a worker job a span is already open and the node nests under it; when a
