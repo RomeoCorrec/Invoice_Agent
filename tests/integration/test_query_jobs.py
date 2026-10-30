@@ -279,6 +279,30 @@ def test_a_poll_finds_a_reply_that_arrived_while_the_worker_was_away(
     assert run_status(graph, run.run_id).pending_kind == "review_reply"
 
 
+def insert_reply(engine: Engine, run: RunStatus, at: datetime, subject: str) -> str:
+    """A reply stored with an exact time (the store itself stamps the moment it receives)."""
+    from uuid import uuid4
+
+    message_id = uuid4()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO mailroom.messages (id, thread_id, direction, supplier_siren, "
+                "address, subject, body, created_at) SELECT :id, :thread, 'in', supplier_siren, "
+                ":address, :subject, 'ok', :at FROM mailroom.messages WHERE thread_id = :thread "
+                "LIMIT 1"
+            ),
+            {
+                "id": message_id,
+                "thread": run.run_id,
+                "address": ADDRESS,
+                "subject": subject,
+                "at": at,
+            },
+        )
+    return f"reply:{message_id}"
+
+
 def test_a_reply_older_than_the_lookback_is_not_picked_up_again(
     graph: Graph,
     factory: sessionmaker[Session],
@@ -289,7 +313,7 @@ def test_a_reply_older_than_the_lookback_is_not_picked_up_again(
     clock: Clock,
 ) -> None:
     run = waiting_for_a_reply(graph, factory, documents)
-    store.receive_message(run.run_id, ADDRESS, "Re:", "Voici la facture.")
+    insert_reply(engine, run, START, "old")  # stamped on the test clock, not the real one
     clock.advance(days=8)  # beyond the seven days a poll looks back
     start_polling(factory, clock)
     worker.run_until_idle()
@@ -362,30 +386,6 @@ def test_a_run_waiting_for_a_reply_survives_a_dead_worker_between_poll_and_reply
     second = worker_for(factory, graph, server, clock)  # a different worker finishes the story
     assert second.run_once()
     assert run_status(graph, run.run_id).pending_kind == "review_reply"
-
-
-def insert_reply(engine: Engine, run: RunStatus, at: datetime, subject: str) -> str:
-    """A reply stored with an exact time (the store itself stamps the moment it receives)."""
-    from uuid import uuid4
-
-    message_id = uuid4()
-    with engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO mailroom.messages (id, thread_id, direction, supplier_siren, "
-                "address, subject, body, created_at) SELECT :id, :thread, 'in', supplier_siren, "
-                ":address, :subject, 'ok', :at FROM mailroom.messages WHERE thread_id = :thread "
-                "LIMIT 1"
-            ),
-            {
-                "id": message_id,
-                "thread": run.run_id,
-                "address": ADDRESS,
-                "subject": subject,
-                "at": at,
-            },
-        )
-    return f"reply:{message_id}"
 
 
 def test_replies_that_share_the_exact_time_of_a_page_boundary_are_not_skipped(
