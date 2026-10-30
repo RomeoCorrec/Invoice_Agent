@@ -192,3 +192,17 @@ def test_a_full_run_is_compared_with_the_extraction_thresholds_and_a_smoke_run_i
     assert code == (0 if "thresholds: all met" in out else 1)
     assert main(["--suite", "smoke", "--yes", "--no-langfuse"]) == 0
     assert "thresholds" not in capsys.readouterr().out
+
+
+# --- the query suite -------------------------------------------------------------------------
+
+
+def test_the_query_dry_run_shows_its_plan(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["--suite", "query", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "query suite: 13 cases, model claude-haiku-5-5" in out
+
+
+def test_the_query_suite_needs_yes_like_the_others(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["--suite", "query"]) == 2
+    assert "--yes" in capsys.readouterr().err

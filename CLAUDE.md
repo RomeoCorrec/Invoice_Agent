@@ -85,6 +85,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 uv run python -m evals.run --suite smoke  # quick eval
 uv run python -m evals.run --suite full   # full eval
+uv run python -m evals.run --suite query --yes   # supplier message drafts (spends money; --dry-run first)
 uv run python -m invoice_agent.api hash-password   # a password hash for APPROVERS (and: secret)
 uv run uvicorn invoice_agent.api.main:app_from_env --factory   # the approval web interface
 uv run python -m invoice_agent.worker enqueue   # queue the PDFs under DOCUMENT_ROOT

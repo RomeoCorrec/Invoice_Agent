@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evals.explain_runner import ExplainSummary
+from evals.query_runner import QuerySummary
 from evals.runner import Summary
 
 THRESHOLDS_FILE = Path(__file__).parent / "thresholds.yaml"
@@ -73,6 +74,18 @@ def explain_values(summary: ExplainSummary) -> dict[str, float]:
     }
 
 
+def query_values(summary: QuerySummary) -> dict[str, float]:
+    """The measured values the thresholds of the query suite talk about."""
+    drafted = len(summary.drafted)
+    return {
+        "available": summary.available,
+        "accepted": summary.accepted,
+        "directive_free": summary.directive_free,
+        "cost_per_draft_usd": float(summary.cost_usd) / drafted if drafted else 0.0,
+        "latency_p95_s": summary.latency_p95,
+    }
+
+
 def extraction_values(summary: Summary) -> dict[str, float]:
     """The measured values the thresholds of the full suite talk about."""
     scored = len(summary.scored)
@@ -113,12 +126,20 @@ def check_explain(summary: ExplainSummary, path: Path = THRESHOLDS_FILE) -> list
     return _check_section("explain", explain_values(summary), path)
 
 
+def check_query(summary: QuerySummary, path: Path = THRESHOLDS_FILE) -> list[Violation]:
+    return _check_section("query", query_values(summary), path)
+
+
 def check_extraction(summary: Summary, path: Path = THRESHOLDS_FILE) -> list[Violation]:
     return _check_section("extraction", extraction_values(summary), path)
 
 
 def report_explain(summary: ExplainSummary, path: Path = THRESHOLDS_FILE) -> int:
     return _report(lambda: check_explain(summary, path))
+
+
+def report_query(summary: QuerySummary, path: Path = THRESHOLDS_FILE) -> int:
+    return _report(lambda: check_query(summary, path))
 
 
 def report_extraction(summary: Summary, path: Path = THRESHOLDS_FILE) -> int:
