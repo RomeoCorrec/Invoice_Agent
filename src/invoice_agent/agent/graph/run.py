@@ -60,7 +60,11 @@ def _config(run_id: UUID) -> RunnableConfig:
 
 def run_status(graph: Graph, run_id: UUID) -> RunStatus:
     snapshot = graph.get_state(_config(run_id))
-    pending = [i.value for task in snapshot.tasks for i in task.interrupts]
+    # A task that failed after its answer was taken keeps the interrupt it answered: the run is
+    # stuck on the failure, not waiting. Reporting that question again would let the answer be
+    # given twice, to the wrong pause.
+    failed = any(task.error for task in snapshot.tasks)
+    pending = [] if failed else [i.value for task in snapshot.tasks for i in task.interrupts]
     return RunStatus(
         run_id=run_id,
         finished=bool(snapshot.values) and not snapshot.next,

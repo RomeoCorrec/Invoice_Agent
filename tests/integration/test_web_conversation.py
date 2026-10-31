@@ -3,6 +3,7 @@
 import re
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid5
 
 import pytest
@@ -11,13 +12,14 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from invoice_agent.agent.correspondence.answers import WaitEnded
+from invoice_agent.agent.correspondence.answers import DraftReview, WaitEnded
 from invoice_agent.agent.graph.run import Graph, answer_pause, run_id_for_invoice, run_status
 from invoice_agent.agent.graph.state import PauseKind
 from invoice_agent.api import main as web
 from invoice_agent.api.auth import Approvers, csrf_token, hash_password
 from invoice_agent.api.config import WebConfig
 from invoice_agent.db.reference_data import demo_contact_address
+from invoice_agent.db.repositories import AuditEventRepository
 from invoice_agent.db.session import session_scope
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from mailroom.seed import seed_contacts
@@ -175,7 +177,7 @@ def test_a_reply_from_another_address_is_marked(
     assert "does not come from the address on file" in page and "not the address on file" in page
 
 
-@pytest.mark.parametrize("step", ["draft", "wait", "reply", "retry"])
+@pytest.mark.parametrize("step", ["draft", "wait", "reply"])
 def test_an_answer_needs_its_own_csrf_token_and_a_login(
     client: TestClient, invoice: UUID, step: str
 ) -> None:
@@ -207,3 +209,74 @@ def test_an_answer_for_the_wrong_pause_is_refused(client: TestClient, invoice: U
 def test_an_invoice_without_a_conversation_has_no_page(client: TestClient, invoice: UUID) -> None:
     assert client.get(f"/invoices/{invoice}/conversation", auth=ALICE).status_code == 404
     assert client.get(f"/invoices/{UUID(int=1)}/conversation", auth=ALICE).status_code == 404
+
+
+def test_a_send_that_fails_goes_back_to_the_person_who_sends_it_again_once(
+    client: TestClient,
+    factory: sessionmaker[Session],
+    invoice: UUID,
+    run: UUID,
+    store: MailroomStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ask(client, invoice)
+    real_send = MailroomStore.send_message
+
+    def down(self: MailroomStore, request: Any) -> Any:
+        raise RuntimeError("the mail provider is down")
+
+    monkeypatch.setattr(MailroomStore, "send_message", down)
+    assert post(client, invoice, "draft", action="send", subject="s", body="Un.").status_code == 303
+    assert store.get_thread(run) == []  # nothing left
+    page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
+    assert "did not confirm the send" in page and "<textarea" in page  # back at the review
+
+    monkeypatch.setattr(MailroomStore, "send_message", real_send)
+    assert (
+        post(client, invoice, "draft", action="send", subject="s", body="Deux.").status_code == 303
+    )
+    [sent] = store.get_thread(run)
+    assert sent.body == "Deux."  # sent once, with the text of the second attempt
+    page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
+    assert "Waiting for the supplier" in page
+    with session_scope(factory) as session:
+        steps = [e.step for e in AuditEventRepository(session).list_for_run(run)]
+    assert "query_reviewed" in steps and "query_reviewed_again" in steps  # both looks audited
+
+
+def test_a_run_stopped_on_an_error_is_not_shown_as_waiting_and_takes_no_answer(
+    client: TestClient,
+    graph: Graph,
+    invoice: UUID,
+    run: UUID,
+    store: MailroomStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ask(client, invoice)
+
+    def broken(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("the database went away")
+
+    monkeypatch.setattr("invoice_agent.agent.graph.query_nodes._schedule_deadline", broken)
+    with pytest.raises(RuntimeError):
+        answer_pause(
+            graph,
+            run,
+            PauseKind.REVIEW_DRAFT,
+            DraftReview(action="send", approver="alice", subject="s", body="Trois."),
+        )
+    assert run_status(graph, run).pending is None  # stopped on the failure, not waiting
+    page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
+    assert "Stopped on an error" in page and "<textarea" not in page
+    # an answer cannot be given again to a question that was already answered
+    again = client.post(
+        f"/invoices/{invoice}/conversation/draft",
+        data={"csrf": _token(invoice, "draft"), "action": "send", "subject": "s", "body": "x"},
+        auth=ALICE,
+    )
+    assert again.status_code == 409
+    assert len(store.get_thread(run)) == 1  # the first one went out, and only that one
+
+
+def _token(invoice: UUID, form: str) -> str:
+    return csrf_token(b"web-secret-" + b"x" * 24, ALICE[0], uuid5(invoice, form))

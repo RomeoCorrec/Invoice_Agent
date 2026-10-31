@@ -42,7 +42,7 @@ from invoice_agent.db.session import session_scope
 from invoice_agent.domain.audit import ActorType, AuditEvent, redact_payload
 from invoice_agent.domain.job import PermanentJobError
 from invoice_agent.domain.rules.injection import find_injection_patterns
-from invoice_agent.tools.errors import ToolRefusedError
+from invoice_agent.tools.errors import ToolError, ToolRefusedError
 from invoice_agent.tools.mailroom import MailroomConnection, MailroomReader, MailroomWriter
 from mailroom.schemas import MessageInfo, SendRequest, SentMessage
 
@@ -58,6 +58,8 @@ MAILROOM_ACTOR = "mailroom"
 # where the conversation stands, in ``state["query"]["status"]``
 DRAFTING, APPROVED, SENT, REPLIED = "drafting", "approved", "sent", "replied"
 REMINDING, AGAIN = "reminding", "again"
+SEND_FAILED = "send_failed"
+"""The mailroom could not be reached: the draft goes back to the person, who sends it again."""
 FINAL = frozenset(
     {
         "discarded",
@@ -228,6 +230,7 @@ def make_review_draft(deps: AgentDeps) -> QNode:
                 "source": draft["source"],
                 "fallback_reason": draft.get("fallback_reason"),
                 "problems": draft.get("problems", []),
+                "send_failed": _status(state) == SEND_FAILED,
             }
         )
         review = DraftReview.model_validate(answer)
@@ -235,7 +238,8 @@ def make_review_draft(deps: AgentDeps) -> QNode:
         _record_once(
             deps,
             state,
-            STEP_REVIEWED,
+            # The second look, after a send that failed, is audited too (one event per step).
+            f"{STEP_REVIEWED}_again" if _status(state) == SEND_FAILED else STEP_REVIEWED,
             (ActorType.HUMAN, review.approver),
             {"action": review.action, "edited": edited},
         )
@@ -278,6 +282,18 @@ def make_send_query(deps: AgentDeps) -> QNode:
                 {"refused": refusal.code},
             )
             return {"query": _where(state, "send_refused", reason=refusal.code)}
+        except ToolError as failure:
+            # Not an exception out of the node: a failure after the person's answer was taken
+            # cannot be answered again (the answer would reach the next pause). The draft goes
+            # back to the person instead; sending again is safe, the key is the same.
+            _record_once(
+                deps,
+                state,
+                f"{STEP_SENT}_failed",
+                (ActorType.TOOL, MAILROOM_ACTOR),
+                {"error": type(failure).__name__},
+            )
+            return {"query": _where(state, SEND_FAILED)}
         _record_once(
             deps,
             state,
@@ -421,7 +437,10 @@ def route_after_review(state: QueryState) -> str:
 
 
 def route_after_send(state: QueryState) -> str:
-    return "await_reply" if _status(state) == SENT else "close"
+    status = _status(state)
+    if status == SEND_FAILED:
+        return "review_draft"
+    return "await_reply" if status == SENT else "close"
 
 
 def route_after_wait(state: QueryState) -> str:
@@ -448,7 +467,9 @@ def build_query_subgraph(
     graph.add_edge(START, "prepare")
     graph.add_conditional_edges("prepare", route_after_prepare, ["review_draft", "close"])
     graph.add_conditional_edges("review_draft", route_after_review, ["send_query", "close"])
-    graph.add_conditional_edges("send_query", route_after_send, ["await_reply", "close"])
+    graph.add_conditional_edges(
+        "send_query", route_after_send, ["await_reply", "review_draft", "close"]
+    )
     graph.add_conditional_edges(
         "await_reply", route_after_wait, ["review_reply", "prepare", "close"]
     )

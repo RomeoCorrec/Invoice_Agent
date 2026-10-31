@@ -35,12 +35,12 @@ class Conversation:
     invoice_number: str
     seller: str
     kind: str | None
-    """What the run waits for, ``None`` when it waits for nothing (a step failed: retry)."""
+    """What the run waits for, ``None`` when it waits for nothing (a step failed)."""
     round: int | None
 
     @property
     def label(self) -> str:
-        return WAITS.get(self.kind or "", "Stopped: the last step failed, it can be retried")
+        return WAITS.get(self.kind or "", "Stopped on an error")
 
 
 def open_conversations(graph: Graph, factory: sessionmaker[Session]) -> list[Conversation]:
