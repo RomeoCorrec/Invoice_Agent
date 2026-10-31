@@ -46,9 +46,21 @@ def test_the_vocabulary_of_pauses_is_the_one_of_the_adr() -> None:
 def test_run_status_reads_the_first_pending_payload_from_the_graph_snapshot() -> None:
     interrupt = SimpleNamespace(value={"kind": "review_draft", "round": 1})
     snapshot = SimpleNamespace(
-        tasks=[SimpleNamespace(interrupts=[interrupt])], values={"run_id": "r"}, next=("query",)
+        tasks=[SimpleNamespace(interrupts=[interrupt], error=None)],
+        values={"run_id": "r"},
+        next=("query",),
     )
     graph = SimpleNamespace(get_state=lambda _config: snapshot)
     found = run_status(graph, uuid4())  # type: ignore[arg-type]
     assert found.pending == {"kind": "review_draft", "round": 1}
     assert found.awaiting_approval is None and not found.finished
+
+
+def test_a_task_that_failed_after_its_answer_leaves_nothing_pending() -> None:
+    """It keeps the interrupt it answered; the run is stopped, not waiting (see the web test)."""
+    interrupt = SimpleNamespace(value={"kind": "review_draft", "round": 1})
+    failed = SimpleNamespace(interrupts=[interrupt], error="ToolTransientError('the tool failed')")
+    snapshot = SimpleNamespace(tasks=[failed], values={"run_id": "r"}, next=("supplier_query",))
+    graph = SimpleNamespace(get_state=lambda _config: snapshot)
+    found = run_status(graph, uuid4())  # type: ignore[arg-type]
+    assert found.pending is None and found.pending_kind is None and not found.finished
