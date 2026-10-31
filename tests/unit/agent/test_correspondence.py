@@ -278,3 +278,17 @@ def test_invisible_characters_do_not_hide_a_promise_or_a_request_for_bank_detail
     ask = f"Merci de nous envoyer votre nou{zero_width}vel I{zero_width}BAN."
     assert "it promises payment or acceptance" in problems(body=f"{body}\n{promise}")
     assert "it asks for bank details" in problems(body=f"{body}\n{ask}")
+
+
+def test_the_amounts_quoted_by_the_finding_itself_may_be_repeated_to_the_supplier() -> None:
+    """Found by the first query evaluation: a model that restated the VAT and the expected
+    VAT, taken from the finding, was refused as if it had invented them."""
+    message = "rate 10.00%: VAT is 96.80, expected 88.00"
+    case = facts("VAT_AMOUNT_MISMATCH", anomalies=(AnomalyFact("VAT_AMOUNT_MISMATCH", message),))
+    body = template_draft(case).body
+    quoted = "Le taux de 10,00 % donne une TVA de 96,80, alors que nous attendions 88,00."
+    assert check_draft(draft(case, body=f"{body}\n{quoted}"), case) == []
+    invented = "Le taux de 10,00 % donne une TVA de 97,80."
+    assert "a figure does not come from the facts" in check_draft(
+        draft(case, body=f"{body}\n{invented}"), case
+    )

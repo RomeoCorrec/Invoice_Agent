@@ -45,6 +45,9 @@ def allowed_numbers(facts: QueryFacts) -> set[str]:
     """The numbers a draft may contain, as bare digits (``2 640,00`` is ``264000``)."""
     allowed = digit_groups(facts.invoice_number) | digit_groups(facts.purchase_order_ref)
     allowed.add(re.sub(r"\D", "", facts.total_ttc))
+    for anomaly in facts.anomalies:
+        # Our own description of the finding quotes the amounts and the rate it is about.
+        allowed.update(re.sub(r"\D", "", token) for token in NUMBER.findall(anomaly.message))
     return allowed
 
 
