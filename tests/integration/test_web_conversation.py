@@ -19,6 +19,7 @@ from invoice_agent.api import main as web
 from invoice_agent.api.auth import Approvers, csrf_token, hash_password
 from invoice_agent.api.config import WebConfig
 from invoice_agent.db.reference_data import demo_contact_address
+from invoice_agent.db.repositories import AuditEventRepository
 from invoice_agent.db.session import session_scope
 from invoice_agent.domain.invoice_status import InvoiceStatus
 from mailroom.seed import seed_contacts
@@ -212,6 +213,7 @@ def test_an_invoice_without_a_conversation_has_no_page(client: TestClient, invoi
 
 def test_a_send_that_fails_goes_back_to_the_person_who_sends_it_again_once(
     client: TestClient,
+    factory: sessionmaker[Session],
     invoice: UUID,
     run: UUID,
     store: MailroomStore,
@@ -227,7 +229,7 @@ def test_a_send_that_fails_goes_back_to_the_person_who_sends_it_again_once(
     assert post(client, invoice, "draft", action="send", subject="s", body="Un.").status_code == 303
     assert store.get_thread(run) == []  # nothing left
     page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
-    assert "could not be sent" in page and "<textarea" in page  # back at the review
+    assert "did not confirm the send" in page and "<textarea" in page  # back at the review
 
     monkeypatch.setattr(MailroomStore, "send_message", real_send)
     assert (
@@ -237,6 +239,9 @@ def test_a_send_that_fails_goes_back_to_the_person_who_sends_it_again_once(
     assert sent.body == "Deux."  # sent once, with the text of the second attempt
     page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
     assert "Waiting for the supplier" in page
+    with session_scope(factory) as session:
+        steps = [e.step for e in AuditEventRepository(session).list_for_run(run)]
+    assert "query_reviewed" in steps and "query_reviewed_again" in steps  # both looks audited
 
 
 def test_a_run_stopped_on_an_error_is_not_shown_as_waiting_and_takes_no_answer(

@@ -10,7 +10,7 @@
 <h2>The message to send</h2>
 <p class="muted">To {{ pending.to | clean(120) }} (the address on file for this supplier). {% if pending.source == 'template' %}Written from a template{% if pending.fallback_reason %} ({{ pending.fallback_reason | clean(80) }}){% endif %}.{% else %}Written by the model and checked by rules.{% endif %} Nothing leaves before you send it.</p>
 {% if pending.send_failed %}
-<p class="warning">The message could not be sent: the mail provider did not answer. Nothing left. Send it again.</p>
+<p class="warning">The mail provider did not confirm the send, so the message may or may not have left. Sending it again is safe: the same message is never delivered twice.</p>
 {% endif %}
 {% if pending.problems %}
 <p class="warning">Rules found problems in an earlier draft: {% for p in pending.problems %}{{ p | clean(80) }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>

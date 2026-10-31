@@ -238,7 +238,8 @@ def make_review_draft(deps: AgentDeps) -> QNode:
         _record_once(
             deps,
             state,
-            STEP_REVIEWED,
+            # The second look, after a send that failed, is audited too (one event per step).
+            f"{STEP_REVIEWED}_again" if _status(state) == SEND_FAILED else STEP_REVIEWED,
             (ActorType.HUMAN, review.approver),
             {"action": review.action, "edited": edited},
         )
