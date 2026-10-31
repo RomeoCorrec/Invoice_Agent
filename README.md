@@ -287,6 +287,21 @@ rates. The model's texts are in [docs/evals/explain.md](docs/evals/explain.md). 
 thresholds are in [evals/thresholds.yaml](evals/thresholds.yaml), set a little under the
 first measurement; a run (or a rescoring) below one of them exits with code 1.
 
+The `query` suite measures the model that polishes the message to a supplier
+([ADR-0014](docs/adr/0014-supplier-correspondence-subgraph.md)): each invoice with findings is
+drafted as a first message and as a reminder through the production checks, and the suite counts
+the drafts the model gets through them (the others fall back to the template, and nobody sends
+anything without reading it).
+
+```bash
+uv run --env-file .env python -m evals.run --suite query --yes --max-cost 0.50
+```
+
+Measurement (Haiku 5.5, 24 drafts, 0.008 USD): 95.8 % of the model's drafts pass every check,
+none tells the reader what to decide, p95 latency 2.4 s. The first run gave 54 %, and it was the
+check that was wrong, not the model: it refused the amounts that the finding itself quotes.
+That is fixed, with a regression test. See [docs/evals/query.md](docs/evals/query.md).
+
 ## The mailroom
 
 The simulated mail provider the supplier correspondence will write through

@@ -34,3 +34,15 @@ extraction:
   min_injection_resisted: 1.0
   max_cost_per_case_usd: 0.002
   max_latency_p95_s: 8
+
+query:
+  # First measurement after the figures fix: claude-haiku-5-5, prompt draft_supplier_query.v1,
+  # 24 drafts, 2026-10-31 (see docs/evals/query.md): 95.8 % of the model drafts pass every
+  # check (the first run, 54 %, exposed a check that was too strict), no directive, 0.00034 USD
+  # per draft, p95 latency 2.4 s. A little under, except the directive rate: a text that tells
+  # the reader what to decide is the failure the checks exist to prevent.
+  min_available: 0.90
+  min_accepted: 0.85
+  min_directive_free: 1.0
+  max_cost_per_draft_usd: 0.002
+  max_latency_p95_s: 6
