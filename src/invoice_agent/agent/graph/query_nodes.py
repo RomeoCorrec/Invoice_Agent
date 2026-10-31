@@ -110,6 +110,12 @@ def _where(state: QueryState, status: str, **more: Any) -> dict[str, Any]:
     }
 
 
+def _attempt(state: QueryState) -> int:
+    """How many sends of this round failed so far: each failure and each second look is its own
+    audit event, while a replay of the same step (same state in) is still recorded once."""
+    return int(state["query"].get("attempt", 0)) if state.get("query") else 0
+
+
 def _record_once(
     deps: AgentDeps,
     state: QueryState,
@@ -239,7 +245,11 @@ def make_review_draft(deps: AgentDeps) -> QNode:
             deps,
             state,
             # The second look, after a send that failed, is audited too (one event per step).
-            f"{STEP_REVIEWED}_again" if _status(state) == SEND_FAILED else STEP_REVIEWED,
+            (
+                f"{STEP_REVIEWED}_again_{_attempt(state)}"
+                if _status(state) == SEND_FAILED
+                else STEP_REVIEWED
+            ),
             (ActorType.HUMAN, review.approver),
             {"action": review.action, "edited": edited},
         )
@@ -252,7 +262,7 @@ def make_review_draft(deps: AgentDeps) -> QNode:
                 "body": review.body or draft["body"],
                 "edited": edited,
             },
-            "query": _where(state, APPROVED),
+            "query": _where(state, APPROVED, attempt=_attempt(state)),
         }
 
     return review_draft
@@ -284,16 +294,26 @@ def make_send_query(deps: AgentDeps) -> QNode:
             return {"query": _where(state, "send_refused", reason=refusal.code)}
         except ToolError as failure:
             # Not an exception out of the node: a failure after the person's answer was taken
-            # cannot be answered again (the answer would reach the next pause). The draft goes
-            # back to the person instead; sending again is safe, the key is the same.
+            # cannot be answered again (the answer would reach the next pause). A call that timed
+            # out may still have been delivered, so the conversation is read before anything
+            # else: a message of this round that is there is the one that was sent.
+            attempt = _attempt(state) + 1
             _record_once(
                 deps,
                 state,
-                f"{STEP_SENT}_failed",
+                f"{STEP_SENT}_failed_{attempt}",
                 (ActorType.TOOL, MAILROOM_ACTOR),
                 {"error": type(failure).__name__},
             )
-            return {"query": _where(state, SEND_FAILED)}
+            earlier = _already_sent(deps, state)
+            if earlier is None:
+                return {"query": _where(state, SEND_FAILED, attempt=attempt)}
+            sent = SentMessage(
+                message_id=earlier.id,
+                thread_id=earlier.thread_id,
+                idempotency_key=request.idempotency_key,
+                replayed=True,
+            )
         _record_once(
             deps,
             state,
@@ -305,6 +325,25 @@ def make_send_query(deps: AgentDeps) -> QNode:
         return {"sent": sent.model_dump(mode="json"), "query": _where(state, SENT)}
 
     return send_query
+
+
+def _already_sent(deps: AgentDeps, state: QueryState) -> MessageInfo | None:
+    """The message this round already sent, if the mailroom has it (one message per round)."""
+    assert deps.mailroom is not None
+
+    async def read() -> list[MessageInfo]:
+        assert deps.mailroom is not None
+        async with MailroomConnection(
+            deps.mailroom, policy=deps.mailroom_policy, tracing=deps.tracing
+        ) as connection:
+            return await MailroomReader(connection).get_thread(UUID(state["run_id"]))
+
+    try:
+        thread = asyncio.run(read())
+    except ToolError:
+        return None  # still not known: the person is told so
+    sent = [message for message in thread if message.direction == "out"]
+    return sent[state["round"] - 1] if len(sent) >= state["round"] else None
 
 
 async def _send(deps: AgentDeps, request: SendRequest) -> SentMessage:

@@ -10,7 +10,7 @@
 <h2>The message to send</h2>
 <p class="muted">To {{ pending.to | clean(120) }} (the address on file for this supplier). {% if pending.source == 'template' %}Written from a template{% if pending.fallback_reason %} ({{ pending.fallback_reason | clean(80) }}){% endif %}.{% else %}Written by the model and checked by rules.{% endif %} Nothing leaves before you send it.</p>
 {% if pending.send_failed %}
-<p class="warning">The mail provider did not confirm the send, so the message may or may not have left. Sending it again is safe: the same message is never delivered twice.</p>
+<p class="warning">The mail provider did not confirm the send, and the conversation could not be read to check. The message may or may not have left. Send it again <strong>unchanged</strong>: the same message is never delivered twice, but a changed text would be refused if the first one did arrive.</p>
 {% endif %}
 {% if pending.problems %}
 <p class="warning">Rules found problems in an earlier draft: {% for p in pending.problems %}{{ p | clean(80) }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
@@ -18,9 +18,9 @@
 <form method="post" action="/invoices/{{ conversation.invoice_id }}/conversation/draft" class="decision">
   <input type="hidden" name="csrf" value="{{ tokens.draft }}">
   <label for="subject">Subject</label>
-  <input id="subject" name="subject" maxlength="200" value="{{ pending.subject | clean(200) }}" required>
+  <input id="subject" name="subject" maxlength="200" value="{{ pending.subject | clean(200) }}" required{% if pending.send_failed %} readonly{% endif %}>
   <label for="body">Message</label>
-  <textarea id="body" name="body" rows="14" maxlength="5000" required>{{ pending.body | block(5000) }}</textarea>
+  <textarea id="body" name="body" rows="14" maxlength="5000" required{% if pending.send_failed %} readonly{% endif %}>{{ pending.body | block(5000) }}</textarea>
   <div class="actions">
     <button type="submit" name="action" value="send" class="approve">Send</button>
     <button type="submit" name="action" value="discard" class="reject" formnovalidate>Do not send</button>
