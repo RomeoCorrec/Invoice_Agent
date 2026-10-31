@@ -42,7 +42,6 @@ from invoice_agent.agent.graph.run import (
     pending_approvals,
     pending_request,
     resume_run,
-    start_run,
 )
 from invoice_agent.agent.graph.state import ApprovalDecision, PauseKind, Verdict
 from invoice_agent.api.auth import csrf_token, csrf_valid
@@ -369,7 +368,7 @@ def create_app(
             thread_unavailable=unavailable,
             tokens={
                 form: csrf_token(config.secret, user, form_scope(invoice_id, form))
-                for form in ("draft", "wait", "reply", "retry")
+                for form in ("draft", "wait", "reply")
             },
         )
 
@@ -454,25 +453,6 @@ def create_app(
             PauseKind.REVIEW_REPLY,
             lambda: ReplyReview(action=action, approver=user, note=note.strip() or None),
         )
-
-    @app.post("/invoices/{invoice_id}/conversation/retry")
-    def retry_step(
-        request: Request, invoice_id: UUID, user: Approver, csrf: Annotated[str, Form()]
-    ) -> Response:
-        """Continue a run whose last step failed (the mailroom was down, for instance)."""
-        if not csrf_valid(config.secret, user, form_scope(invoice_id, "retry"), csrf):
-            return message(request, 403, "This form is not valid any more. Reload the page.")
-        found = conversation_for_invoice(graph, session_factory, invoice_id)
-        if found is None:
-            return message(request, 409, "This conversation is over.")
-        try:
-            start_run(graph, run_id=found[0].run_id, document="")  # the run exists: it continues
-        except ToolError as exc:
-            log_event(
-                logger, "conversation_step_failed", level=logging.WARNING, error=safe_text(exc)
-            )
-            return message(request, 502, "The step failed again. Try later.")
-        return RedirectResponse(f"/invoices/{invoice_id}/conversation", 303)
 
     return app
 

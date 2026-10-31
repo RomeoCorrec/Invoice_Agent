@@ -9,6 +9,9 @@
 {% if conversation.kind == 'review_draft' %}
 <h2>The message to send</h2>
 <p class="muted">To {{ pending.to | clean(120) }} (the address on file for this supplier). {% if pending.source == 'template' %}Written from a template{% if pending.fallback_reason %} ({{ pending.fallback_reason | clean(80) }}){% endif %}.{% else %}Written by the model and checked by rules.{% endif %} Nothing leaves before you send it.</p>
+{% if pending.send_failed %}
+<p class="warning">The message could not be sent: the mail provider did not answer. Nothing left. Send it again.</p>
+{% endif %}
 {% if pending.problems %}
 <p class="warning">Rules found problems in an earlier draft: {% for p in pending.problems %}{{ p | clean(80) }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
 {% endif %}
@@ -48,11 +51,7 @@
 </form>
 
 {% else %}
-<form method="post" action="/invoices/{{ conversation.invoice_id }}/conversation/retry" class="decision">
-  <input type="hidden" name="csrf" value="{{ tokens.retry }}">
-  <p>The last step did not finish (the mailroom may have been unavailable). The run is kept as it was.</p>
-  <div class="actions"><button type="submit">Retry</button></div>
-</form>
+<p class="warning">The last step stopped on an error and nothing can be answered here. The run keeps its place and its audit trail; an operator can continue it.</p>
 {% endif %}
 
 <h2>The conversation</h2>
