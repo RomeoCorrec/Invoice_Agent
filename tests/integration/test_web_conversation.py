@@ -241,7 +241,64 @@ def test_a_send_that_fails_goes_back_to_the_person_who_sends_it_again_once(
     assert "Waiting for the supplier" in page
     with session_scope(factory) as session:
         steps = [e.step for e in AuditEventRepository(session).list_for_run(run)]
-    assert "query_reviewed" in steps and "query_reviewed_again" in steps  # both looks audited
+    assert "query_reviewed" in steps and "query_reviewed_again_1" in steps  # both looks audited
+
+
+def test_each_failed_send_and_each_second_look_is_audited_and_the_text_is_locked(
+    client: TestClient,
+    factory: sessionmaker[Session],
+    invoice: UUID,
+    run: UUID,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ask(client, invoice)
+
+    def down(self: MailroomStore, request: Any) -> Any:
+        raise RuntimeError("the mail provider is down")
+
+    monkeypatch.setattr(MailroomStore, "send_message", down)
+    for _ in range(2):
+        assert (
+            post(client, invoice, "draft", action="send", subject="s", body="Un.").status_code
+            == 303
+        )
+    page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
+    assert page.count(" readonly") == 2  # the text cannot be changed from the page
+    with session_scope(factory) as session:
+        steps = [e.step for e in AuditEventRepository(session).list_for_run(run)]
+    assert {"query_sent_failed_1", "query_sent_failed_2", "query_reviewed_again_1"} <= set(steps)
+
+
+def test_a_send_that_was_delivered_but_not_confirmed_is_found_in_the_conversation(
+    client: TestClient,
+    factory: sessionmaker[Session],
+    invoice: UUID,
+    run: UUID,
+    store: MailroomStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ask(client, invoice)
+    real_send = MailroomStore.send_message
+    calls = []
+
+    def delivered_then_lost(self: MailroomStore, request: Any) -> Any:
+        calls.append(request)
+        real_send(self, request)  # the message goes out...
+        if len(calls) == 1:
+            raise TimeoutError("...and the answer never comes back")
+
+    monkeypatch.setattr(MailroomStore, "send_message", delivered_then_lost)
+    assert post(client, invoice, "draft", action="send", subject="s", body="Un.").status_code == 303
+    assert len(store.get_thread(run)) == 1
+    page = client.get(f"/invoices/{invoice}/conversation", auth=ALICE).text
+    assert (
+        "Waiting for the supplier" in page and "<textarea" not in page
+    )  # no second chance to edit
+    with session_scope(factory) as session:
+        sent = [
+            e for e in AuditEventRepository(session).list_for_run(run) if e.step == "query_sent"
+        ]
+    assert [e.payload["replayed"] for e in sent] == [True]
 
 
 def test_a_run_stopped_on_an_error_is_not_shown_as_waiting_and_takes_no_answer(
