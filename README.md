@@ -196,6 +196,33 @@ document.
 
 ![An invoice flagged as a duplicate: the other copy, the supplier's orders and the PDF](docs/images/decision-context.jpg)
 
+### Asking the supplier
+
+A third decision, **Reject and ask the supplier**, starts the correspondence subgraph
+([ADR-0014](docs/adr/0014-supplier-correspondence-subgraph.md)): the copy is rejected and a
+message to the supplier is drafted.
+
+![The decision page with its third button, Reject and ask the supplier](docs/images/ask-the-supplier.jpg)
+
+Nothing leaves before a person has read it. The draft is written from facts the code chose (the
+model only polishes it, and the code checks the result, falling back to a template); the recipient
+is the address on file for the supplier and cannot be edited.
+
+![The draft to review: recipient, subject and text, to send as it is, edit, or drop](docs/images/draft-review.jpg)
+
+The open conversations are listed under the queue, each with what it waits for.
+
+![The queue with an open conversation that has an answer to read](docs/images/conversations-queue.jpg)
+
+The supplier's reply is shown as text, never as instructions: bank details are removed before it is
+stored and said to have been, an instruction aimed at an AI or a sender that is not the address on
+file is flagged. The person says what it settles; the agent decides nothing.
+
+![A reply to read, with a warning that its bank details were removed](docs/images/reply-review.jpg)
+
+Replies and deadlines reach the waiting run through the job queue: the worker polls the mailroom,
+and a reminder is proposed when nobody answered in time (`REPLY_DEADLINE_DAYS`).
+
 ```bash
 uv run python -m invoice_agent.api hash-password     # then: APPROVERS=alice=<hash> in .env
 uv run python -m invoice_agent.api secret            # WEB_SECRET=<value> in .env
